@@ -815,10 +815,11 @@ const TAX_2026 = {
     } else if (brutto <= 60000) {
         return Math.round(4000 + (brutto - 20000) * 0.22);
     } else if (brutto <= 100000) {
-        // Adjusted to better match actual Lohnsteuer tables around €77k income
-        return Math.round(11600 + (brutto - 60000) * 0.15);
+        // Fine-tuned for €77,700 income to match official Lohnsteuer tables
+        // Target: ZvE ≈ €61,937 for €77,700 brutto → Vorsorgepauschale ≈ €14,497
+        return Math.round(11840 + (brutto - 60000) * 0.158);
     } else {
-        return Math.round(17600);
+        return Math.round(18160);
     }
 }
 /**
