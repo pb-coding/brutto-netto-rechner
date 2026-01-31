@@ -12,7 +12,7 @@
   "static/chunks/node_modules_@radix-ui_7d672dc9._.js",
   "static/chunks/node_modules_@floating-ui_1b6e7b6d._.js",
   "static/chunks/node_modules_@reduxjs_toolkit_b00a18bb._.js",
-  "static/chunks/node_modules_f7bec85c._.js"
+  "static/chunks/node_modules_3b7855dd._.js"
 ],
     source: "dynamic"
 });

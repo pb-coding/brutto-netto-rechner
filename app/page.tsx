@@ -70,6 +70,8 @@ export default function TaxDashboard() {
   const [kirchensteuerSatz, setKirchensteuerSatz] = useState<number>(9);
   const [zusatzbeitrag, setZusatzbeitrag] = useState<number>(1.70);
   const [werbungskosten, setWerbungskosten] = useState<number>(0);
+  const [kinderAnzahl, setKinderAnzahl] = useState<number>(0);
+  const [alter, setAlter] = useState<number>(30);
 
   // Calculate tax result
   const taxInput: TaxInput = useMemo(
@@ -80,8 +82,10 @@ export default function TaxDashboard() {
       kirchensteuerSatz: kirchensteuerSatz / 100,
       zusatzbeitrag,
       werbungskosten,
+      kinderAnzahl,
+      alter,
     }),
-    [bruttoJahr, steuerklasse, kirchensteuer, kirchensteuerSatz, zusatzbeitrag, werbungskosten]
+    [bruttoJahr, steuerklasse, kirchensteuer, kirchensteuerSatz, zusatzbeitrag, werbungskosten, kinderAnzahl, alter]
   );
 
   const taxResult = useMemo(() => calculateTax(taxInput), [taxInput]);
@@ -277,6 +281,70 @@ export default function TaxDashboard() {
               </CardContent>
             </Card>
 
+            {/* Alter */}
+            <Card className="bg-zinc-900 border-zinc-800 shadow-xl">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-lg flex items-center gap-2 text-white">
+                  <Baby className="h-5 w-5 text-blue-400" />
+                  Alter
+                </CardTitle>
+                <CardDescription className="text-zinc-400">
+                  Für Pflegeversicherung (Kinderlosenzuschlag ab 23)
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-2xl font-bold text-blue-400">
+                    {alter} Jahre
+                  </span>
+                </div>
+                <Slider
+                  value={[alter]}
+                  onValueChange={([value]) => setAlter(value)}
+                  min={18}
+                  max={70}
+                  step={1}
+                />
+                <div className="flex justify-between text-xs text-zinc-500">
+                  <span>18</span>
+                  <span>40</span>
+                  <span>70</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Kinderanzahl */}
+            <Card className="bg-zinc-900 border-zinc-800 shadow-xl">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-lg flex items-center gap-2 text-white">
+                  <Baby className="h-5 w-5 text-blue-400" />
+                  Anzahl Kinder
+                </CardTitle>
+                <CardDescription className="text-zinc-400">
+                  Für PV-Abschläge (ab 2. bis 5. Kind)
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-2xl font-bold text-blue-400">
+                    {kinderAnzahl}
+                  </span>
+                </div>
+                <Slider
+                  value={[kinderAnzahl]}
+                  onValueChange={([value]) => setKinderAnzahl(value)}
+                  min={0}
+                  max={10}
+                  step={1}
+                />
+                <div className="flex justify-between text-xs text-zinc-500">
+                  <span>0</span>
+                  <span>5</span>
+                  <span>10</span>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Werbungskosten */}
             <Card className="bg-zinc-900 border-zinc-800 shadow-xl">
               <CardHeader className="pb-4">
@@ -423,7 +491,11 @@ export default function TaxDashboard() {
                         <p className="text-lg font-semibold text-white">
                           {formatCurrency(taxResult.pflegeversicherung)}
                         </p>
-                        <p className="text-xs text-zinc-600">2,4% (kindlos)</p>
+                        <p className="text-xs text-zinc-600">
+                          {(taxResult.pflegeversicherung / Math.min(taxResult.bruttoJahr, 69750) * 100).toFixed(1)}%
+                          {kinderAnzahl === 0 && alter >= 23 && " (inkl. Kinderlosenzuschlag)"}
+                          {kinderAnzahl >= 2 && " (mit Kinderabschlägen)"}
+                        </p>
                       </div>
                       <div>
                         <p className="text-xs text-zinc-500">Arbeitslosenvers.</p>
@@ -471,9 +543,13 @@ export default function TaxDashboard() {
                         </p>
                       </div>
                       <div>
-                        <p className="text-xs text-zinc-500">ZvE (für Lohnsteuer)</p>
+                        <p className="text-xs text-zinc-500">ZvE nach §39b (36€-Rundung)</p>
                         <p className="text-lg font-semibold text-blue-400">
-                          {formatCurrency(taxResult.zuVersteuerndesEinkommen)}
+                          {formatCurrency(taxResult.zvEForLohnsteuer)}
+                        </p>
+                        <p className="text-xs text-zinc-600">
+                          {taxResult.zuVersteuerndesEinkommen !== taxResult.zvEForLohnsteuer && 
+                            `abgerundet von ${formatCurrency(taxResult.zuVersteuerndesEinkommen)}`}
                         </p>
                       </div>
                     </div>
