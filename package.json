@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "test:tax": "tsc -p tsconfig.test.json && node --test .tmp-tests/tests/tax-calculator.test.js"
