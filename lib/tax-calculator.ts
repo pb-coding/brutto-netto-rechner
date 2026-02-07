@@ -70,10 +70,13 @@ const TAX_2026 = {
   
   // Sonderausgaben Pauschbetrag - §10c EStG
   sonderausgabenPauschbetrag: 36,
+
+  // Entlastungsbetrag für Alleinerziehende (Steuerklasse II) - §24b EStG
+  entlastungsbetragAlleinerziehende: 4260,
   
   // Tax bracket thresholds (Progressionszonen) - §32a Abs. 1 EStG
-  zone1End: 17799,
-  zone2End: 69878,
+  zone1End: 17443,
+  zone2End: 68480,
   zone3End: 277825,
   
   // Social insurance rates and limits
@@ -100,6 +103,11 @@ const TAX_2026 = {
   
   // Vorsorgepauschale - §39b EStG
   vorsorgepauschaleRundung: 36, // Abrundung auf volle 36 Euro
+
+  // Grenzwerte für Steuerklassen V/VI - §39b Abs. 2 Satz 7 EStG / PAP 2026
+  stkl5Grenze1: 14071,
+  stkl5Grenze2: 34939,
+  stkl5Grenze3: 222260,
 };
 
 /**
@@ -115,25 +123,65 @@ function calculateTarif(zve: number): number {
     // Grundfreibetrag - No tax (§32a Abs. 1 Nr. 1)
     steuer = 0;
   } else if (x <= TAX_2026.zone1End) {
-    // Zone 2: 12.349 - 17.799 € (§32a Abs. 1 Nr. 2)
+    // Zone 2: 12.349 - 17.443 € (§32a Abs. 1 Nr. 2)
     // y = 1/10.000 of amount exceeding Grundfreibetrag
     const y = (x - TAX_2026.grundfreibetrag) / 10000;
-    steuer = (914.51 * y + 1400) * y;
+    steuer = (932.30 * y + 1400) * y;
   } else if (x <= TAX_2026.zone2End) {
-    // Zone 3: 17.800 - 69.878 € (§32a Abs. 1 Nr. 3)
-    // z = 1/10.000 of amount exceeding 17.799 €
-    const z = (x - 17799) / 10000;
-    steuer = (173.10 * z + 2397) * z + 1034.87;
+    // Zone 3: 17.444 - 68.480 € (§32a Abs. 1 Nr. 3)
+    // z = 1/10.000 of amount exceeding 17.443 €
+    const z = (x - 17443) / 10000;
+    steuer = (176.64 * z + 2397) * z + 1015.13;
   } else if (x <= TAX_2026.zone3End) {
     // Zone 4: Proportional zone 42% (§32a Abs. 1 Nr. 4)
-    steuer = 0.42 * x - 11135.63;
+    steuer = 0.42 * x - 10911.92;
   } else {
     // Zone 5: Reichensteuer 45% (§32a Abs. 1 Nr. 5)
-    steuer = 0.45 * x - 19470.38;
+    steuer = 0.45 * x - 19185.88;
   }
 
   // Round down to full Euro (§32a Abs. 1 S. 6 EStG)
   return Math.max(0, Math.floor(steuer));
+}
+
+/**
+ * §39b Abs. 2 Satz 7 EStG - Spezialtarif für Steuerklassen V und VI
+ * Umsetzung gemäß PAP 2026 (MST5-6/UP5-6).
+ */
+function calculateTarifClassFiveSix(zve: number): number {
+  const zzx = Math.floor(zve);
+  const zx = Math.min(zzx, TAX_2026.stkl5Grenze2);
+
+  let st = calculateUp56(zx);
+
+  if (zzx > TAX_2026.stkl5Grenze2) {
+    if (zzx > TAX_2026.stkl5Grenze3) {
+      st = Math.floor(
+        st +
+        (TAX_2026.stkl5Grenze3 - TAX_2026.stkl5Grenze2) * 0.42 +
+        (zzx - TAX_2026.stkl5Grenze3) * 0.45
+      );
+    } else {
+      st = Math.floor(st + (zzx - TAX_2026.stkl5Grenze2) * 0.42);
+    }
+  }
+
+  if (zzx > TAX_2026.stkl5Grenze1) {
+    const vergl = st;
+    const stAtGrenze1 = calculateUp56(TAX_2026.stkl5Grenze1);
+    const hoch = Math.floor(stAtGrenze1 + (zzx - TAX_2026.stkl5Grenze1) * 0.42);
+    st = Math.max(vergl, hoch);
+  }
+
+  return Math.max(0, Math.floor(st));
+}
+
+function calculateUp56(zx: number): number {
+  const st1 = calculateTarif(zx * 1.25);
+  const st2 = calculateTarif(zx * 0.75);
+  const diff = (st1 - st2) * 2;
+  const mist = Math.floor(zx * 0.14);
+  return Math.max(diff, mist);
 }
 
 /**
@@ -181,14 +229,14 @@ function calculateKirchensteuer(lohnsteuer: number, enabled: boolean, satz: numb
 /**
  * PUEG Reform 2026 - Pflegeversicherung mit Kinderstaffelung
  * 
- * Arbeitnehmer-Anteil Basis: 2,3%
+ * Arbeitnehmer-Anteil Basis: 1,8%
  * + 0,6% Kinderlosenzuschlag (ab 23 Jahre ohne Kinder)
  * - 0,25% pro Kind (2. bis 5. Kind, bis 25. Lebensjahr)
  * 
  * Mindestsatz: 1,7% (nur durch Kinderabschläge erreichbar)
  */
 function calculatePVSatz(alter: number, kinderAnzahl: number): number {
-  let arbeitnehmerAnteil = TAX_2026.pvArbeitnehmerAnteilBasis; // 2,3%
+  let arbeitnehmerAnteil = TAX_2026.pvArbeitnehmerAnteilBasis; // 1,8%
   
   // Kinderlosenzuschlag: +0,6% ab 23 Jahren ohne Kinder
   if (alter >= 23 && kinderAnzahl === 0) {
@@ -214,7 +262,6 @@ function calculatePVSatz(alter: number, kinderAnzahl: number): number {
  * Vereinfachte Berechnung für Lohnsteuerzwecke
  */
 function calculateVorsorgepauschale(
-  brutto: number,
   rvBeitrag: number,
   kvBeitrag: number,
   pvBeitrag: number
@@ -222,17 +269,10 @@ function calculateVorsorgepauschale(
   // Teilbetrag RV: AN-Anteil der Rentenversicherung
   const rvTeilbetrag = rvBeitrag;
   
-  // Teilbetrag KV/PV: AN-Anteil der Kranken- und Pflegeversicherung
-  // Basistarif: 14% für GKV + Zusatz, PV entsprechend
+  // Teilbetrag KV/PV
   const kvPvTeilbetrag = kvBeitrag + pvBeitrag;
-  
-  // Gesamte Vorsorgepauschale (vereinfacht)
-  let vorsorgepauschale = rvTeilbetrag + kvPvTeilbetrag;
-  
-  // Maximale Vorsorgepauschale begrenzen (ca. 20% des Brutto bis Maximum)
-  const maxPauschale = Math.min(brutto * 0.20, 19000);
-  vorsorgepauschale = Math.min(vorsorgepauschale, maxPauschale);
-  
+
+  const vorsorgepauschale = rvTeilbetrag + kvPvTeilbetrag;
   return Math.round(vorsorgepauschale);
 }
 
@@ -276,7 +316,6 @@ function calculateSozialabgaben(
 
   // Vorsorgepauschale berechnen
   const vorsorgepauschale = calculateVorsorgepauschale(
-    brutto,
     rentenversicherung,
     krankenversicherung,
     pflegeversicherung
@@ -307,18 +346,47 @@ export function calculateTax(input: TaxInput): TaxResult {
     alter,
   } = input;
 
+  if (!Number.isFinite(bruttoJahr) || bruttoJahr < 0) {
+    throw new Error("bruttoJahr muss eine nicht-negative Zahl sein.");
+  }
+  if (!Number.isFinite(zusatzbeitrag) || zusatzbeitrag < 0) {
+    throw new Error("zusatzbeitrag muss eine nicht-negative Zahl sein.");
+  }
+  if (!Number.isFinite(werbungskosten) || werbungskosten < 0) {
+    throw new Error("werbungskosten muss eine nicht-negative Zahl sein.");
+  }
+  if (!Number.isFinite(kinderAnzahl) || kinderAnzahl < 0) {
+    throw new Error("kinderAnzahl muss eine nicht-negative Zahl sein.");
+  }
+  if (!Number.isFinite(alter) || alter < 0) {
+    throw new Error("alter muss eine nicht-negative Zahl sein.");
+  }
+
   // Sozialabgaben berechnen
-  const sozialabgaben = calculateSozialabgaben(bruttoJahr, zusatzbeitrag, alter, kinderAnzahl);
+  const sozialabgaben = calculateSozialabgaben(
+    bruttoJahr,
+    zusatzbeitrag,
+    alter,
+    kinderAnzahl
+  );
 
   // Zu versteuerndes Einkommen berechnen
   let zve = bruttoJahr;
 
-  // Werbungskosten (max von Pauschbetrag oder tatsächlichen Kosten)
-  const effectiveWerbungskosten = Math.max(TAX_2026.werbungskostenPauschbetrag, werbungskosten);
+  // Werbungskosten und Sonderausgaben gelten in Steuerklassen I bis V
+  const effectiveWerbungskosten =
+    steuerklasse === "VI"
+      ? 0
+      : Math.max(TAX_2026.werbungskostenPauschbetrag, werbungskosten);
   zve -= effectiveWerbungskosten;
 
-  // Sonderausgaben Pauschbetrag
-  zve -= TAX_2026.sonderausgabenPauschbetrag;
+  const effectiveSonderausgaben = steuerklasse === "VI" ? 0 : TAX_2026.sonderausgabenPauschbetrag;
+  zve -= effectiveSonderausgaben;
+
+  // Entlastungsbetrag für Steuerklasse II
+  if (steuerklasse === "II") {
+    zve -= TAX_2026.entlastungsbetragAlleinerziehende;
+  }
 
   // Vorsorgepauschale
   zve -= sozialabgaben.vorsorgepauschale;
@@ -336,7 +404,6 @@ export function calculateTax(input: TaxInput): TaxResult {
     case "I":
     case "II":
     case "IV":
-    case "VI":
       // Standard-Tarif
       // §39b Abs. 2 Satz 9: Abrundung auf volle 36 Euro
       zvEForLohnsteuer = roundTo36(zve);
@@ -350,11 +417,10 @@ export function calculateTax(input: TaxInput): TaxResult {
       break;
 
     case "V":
-      // Ohne Grundfreibetrag - direkt ab erster Progressionsstufe
-      // Faktor-Logik des PAP: zvE + Grundfreibetrag
-      zve = zve + TAX_2026.grundfreibetrag;
+    case "VI":
+      // Spezialtarif für StKl V/VI gemäß §39b Abs. 2 Satz 7
       zvEForLohnsteuer = roundTo36(zve);
-      lohnsteuer = calculateTarif(zvEForLohnsteuer);
+      lohnsteuer = calculateTarifClassFiveSix(zvEForLohnsteuer);
       break;
 
     default:
@@ -377,7 +443,7 @@ export function calculateTax(input: TaxInput): TaxResult {
     steuerklasse,
     ...sozialabgaben,
     werbungskostenPauschbetrag: effectiveWerbungskosten,
-    sonderausgabenPauschbetrag: TAX_2026.sonderausgabenPauschbetrag,
+    sonderausgabenPauschbetrag: effectiveSonderausgaben,
     vorsorgepauschale: sozialabgaben.vorsorgepauschale,
     zuVersteuerndesEinkommen: zvERoh,
     zvEForLohnsteuer,
@@ -455,14 +521,14 @@ export function generateProgressionData(): { einkommen: number; grenzsteuersatz:
       grenzsteuersatz = 0;
     } else if (zve <= TAX_2026.zone1End) {
       // Zone 2: Progressing from ~14% to ~24%
-      // Formula: (1829.02 * y + 1400) / 10000 where y = (zvE - GFB) / 10000
+      // Formula: (1864.60 * y + 1400) / 10000 where y = (zvE - GFB) / 10000
       const y = (zve - TAX_2026.grundfreibetrag) / 10000;
-      grenzsteuersatz = (1829.02 * y + 1400) / 100;
+      grenzsteuersatz = (1864.60 * y + 1400) / 100;
     } else if (zve <= TAX_2026.zone2End) {
       // Zone 3: Progressing from ~24% to ~42%
-      // Formula: (346.20 * z + 2397) / 10000 where z = (zvE - 17799) / 10000
-      const z = (zve - 17799) / 10000;
-      grenzsteuersatz = (346.20 * z + 2397) / 100;
+      // Formula: (353.28 * z + 2397) / 10000 where z = (zvE - 17443) / 10000
+      const z = (zve - 17443) / 10000;
+      grenzsteuersatz = (353.28 * z + 2397) / 100;
     } else if (zve <= TAX_2026.zone3End) {
       // Zone 4: Flat 42%
       grenzsteuersatz = 42;

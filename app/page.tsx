@@ -500,7 +500,11 @@ export default function TaxDashboard() {
                           {formatCurrency(taxResult.pflegeversicherung)}
                         </p>
                         <p className="text-xs text-zinc-600">
-                          {(taxResult.pflegeversicherung / Math.min(taxResult.bruttoJahr, 69750) * 100).toFixed(1)}%
+                          {(
+                            Math.min(taxResult.bruttoJahr, 69750) > 0
+                              ? (taxResult.pflegeversicherung / Math.min(taxResult.bruttoJahr, 69750)) * 100
+                              : 0
+                          ).toFixed(1)}%
                           {kinderAnzahl === 0 && alter >= 23 && " (inkl. Kinderlosenzuschlag)"}
                           {kinderAnzahl >= 2 && " (mit Kinderabschlägen)"}
                         </p>
