@@ -443,7 +443,15 @@ export default function TaxDashboard() {
                     </h4>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <div>
-                        <p className="text-xs text-zinc-500">Lohnsteuer</p>
+                        <p className="text-xs text-zinc-500 flex items-center gap-1">
+                          Lohnsteuer
+                          <span className="group relative cursor-help" title="Hinweis zur Berechnung">
+                            <Info className="h-3 w-3 text-zinc-600 hover:text-blue-400 transition-colors" />
+                            <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
+                              Die Lohnsteuer wird nach vereinfachten Regeln berechnet. Aufgrund der komplexen §39b EStG Vorsorgepauschale können geringfügige Abweichungen zu Lohnsteuertabellen auftreten.
+                            </span>
+                          </span>
+                        </p>
                         <p className="text-lg font-semibold text-white">{formatCurrency(taxResult.lohnsteuer)}</p>
                       </div>
                       <div>

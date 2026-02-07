@@ -86,10 +86,10 @@ const TAX_2026 = {
   kvBeitragssatz: 0.146,
   kvBeitragsbemessungsgrenze: 69750,
   
-  // Pflegeversicherung - PUEG Reform 2026
+  // Pflegeversicherung - 2026 (offizielle Werte)
   pvBeitragssatz: 0.036, // Gesamtsatz 3,6%
   pvBeitragsbemessungsgrenze: 69750,
-  pvArbeitnehmerAnteilBasis: 0.023, // 2,3% Basis ab 2026
+  pvArbeitnehmerAnteilBasis: 0.018, // 1,8% AN-Anteil (nicht 2,3% PUEG)
   pvKinderlosenzuschlag: 0.006, // +0,6% für kinderlose ab 23
   pvKinderabschlag: 0.0025, // -0,25% pro Kind (2.-5. Kind)
   
@@ -419,10 +419,18 @@ export function generateWhatIfData(input: TaxInput): { brutto: number; netto: nu
 /**
  * Generate data for Steuerprogression chart
  */
+/**
+ * Generate data for Steuerprogression chart
+ * Shows marginal and average tax rates
+ * 
+ * The marginal tax rate (Grenzsteuersatz) is calculated analytically
+ * based on the official §32a EStG formula zones for a smooth curve.
+ */
 export function generateProgressionData(): { einkommen: number; grenzsteuersatz: number; durchschnittssteuersatz: number }[] {
   const data: { einkommen: number; grenzsteuersatz: number; durchschnittssteuersatz: number }[] = [];
   
-  for (let einkommen = 0; einkommen <= 300000; einkommen += 2500) {
+  for (let einkommen = 0; einkommen <= 300000; einkommen += 1000) {
+    // Calculate tax for this income level
     const result = calculateTax({
       bruttoJahr: einkommen,
       steuerklasse: "I",
@@ -434,23 +442,41 @@ export function generateProgressionData(): { einkommen: number; grenzsteuersatz:
       alter: 30,
     });
     
-    const resultPlus = calculateTax({
-      bruttoJahr: einkommen + 100,
-      steuerklasse: "I",
-      kirchensteuer: false,
-      kirchensteuerSatz: 0.09,
-      zusatzbeitrag: 1.7,
-      werbungskosten: 0,
-      kinderAnzahl: 0,
-      alter: 30,
-    });
-    
-    const grenzsteuersatz = ((resultPlus.lohnsteuer - result.lohnsteuer) / 100) * 100;
+    // Calculate average tax rate
     const durchschnittssteuersatz = einkommen > 0 ? (result.lohnsteuer / einkommen) * 100 : 0;
+    
+    // Calculate analytical marginal tax rate based on zone
+    // This gives the theoretical marginal rate at each point
+    let grenzsteuersatz = 0;
+    const zve = result.zuVersteuerndesEinkommen;
+    
+    if (zve <= TAX_2026.grundfreibetrag) {
+      // Zone 1: 0%
+      grenzsteuersatz = 0;
+    } else if (zve <= TAX_2026.zone1End) {
+      // Zone 2: Progressing from ~14% to ~24%
+      // Formula: (1829.02 * y + 1400) / 10000 where y = (zvE - GFB) / 10000
+      const y = (zve - TAX_2026.grundfreibetrag) / 10000;
+      grenzsteuersatz = (1829.02 * y + 1400) / 100;
+    } else if (zve <= TAX_2026.zone2End) {
+      // Zone 3: Progressing from ~24% to ~42%
+      // Formula: (346.20 * z + 2397) / 10000 where z = (zvE - 17799) / 10000
+      const z = (zve - 17799) / 10000;
+      grenzsteuersatz = (346.20 * z + 2397) / 100;
+    } else if (zve <= TAX_2026.zone3End) {
+      // Zone 4: Flat 42%
+      grenzsteuersatz = 42;
+    } else {
+      // Zone 5: Flat 45%
+      grenzsteuersatz = 45;
+    }
+    
+    // Clamp to valid range
+    grenzsteuersatz = Math.min(45, Math.max(0, grenzsteuersatz));
     
     data.push({
       einkommen,
-      grenzsteuersatz: Math.min(45, Math.max(0, grenzsteuersatz)),
+      grenzsteuersatz,
       durchschnittssteuersatz,
     });
   }
