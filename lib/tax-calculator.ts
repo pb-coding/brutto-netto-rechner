@@ -263,16 +263,20 @@ function calculatePVSatz(alter: number, kinderAnzahl: number): number {
  */
 function calculateVorsorgepauschale(
   rvBeitrag: number,
+  avBeitrag: number,
   kvBeitrag: number,
   pvBeitrag: number
 ): number {
   // Teilbetrag RV: AN-Anteil der Rentenversicherung
   const rvTeilbetrag = rvBeitrag;
+
+  // Teilbetrag ALV: anteilige steuerliche Berücksichtigung im PAP-Kontext
+  const avTeilbetrag = avBeitrag * 0.235;
   
   // Teilbetrag KV/PV
   const kvPvTeilbetrag = kvBeitrag + pvBeitrag;
 
-  const vorsorgepauschale = rvTeilbetrag + kvPvTeilbetrag;
+  const vorsorgepauschale = rvTeilbetrag + avTeilbetrag + kvPvTeilbetrag;
   return Math.round(vorsorgepauschale);
 }
 
@@ -317,6 +321,7 @@ function calculateSozialabgaben(
   // Vorsorgepauschale berechnen
   const vorsorgepauschale = calculateVorsorgepauschale(
     rentenversicherung,
+    arbeitslosenversicherung,
     krankenversicherung,
     pflegeversicherung
   );

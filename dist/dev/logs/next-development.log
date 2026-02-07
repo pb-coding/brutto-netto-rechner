@@ -11,3 +11,5 @@
        please check the style of container, or the props width(100%) and height(100%),
        or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
        height and width.
+[00:43:11.660] Server  LOG     ✓ Compiled in 274ms
+[00:44:24.835] Server  LOG     ✓ Compiled in 39ms

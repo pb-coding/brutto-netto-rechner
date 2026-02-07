@@ -192,12 +192,14 @@ function calculatePVSatz(alter, kinderAnzahl) {
  *
  * Vereinfachte Berechnung für Lohnsteuerzwecke
  */
-function calculateVorsorgepauschale(rvBeitrag, kvBeitrag, pvBeitrag) {
+function calculateVorsorgepauschale(rvBeitrag, avBeitrag, kvBeitrag, pvBeitrag) {
     // Teilbetrag RV: AN-Anteil der Rentenversicherung
     const rvTeilbetrag = rvBeitrag;
+    // Teilbetrag ALV: anteilige steuerliche Berücksichtigung im PAP-Kontext
+    const avTeilbetrag = avBeitrag * 0.235;
     // Teilbetrag KV/PV
     const kvPvTeilbetrag = kvBeitrag + pvBeitrag;
-    const vorsorgepauschale = rvTeilbetrag + kvPvTeilbetrag;
+    const vorsorgepauschale = rvTeilbetrag + avTeilbetrag + kvPvTeilbetrag;
     return Math.round(vorsorgepauschale);
 }
 /**
@@ -220,7 +222,7 @@ function calculateSozialabgaben(brutto, zusatzbeitrag, alter, kinderAnzahl) {
     const pflegeversicherung = Math.round((pvBasis * pvSatz) * 100) / 100;
     const gesamtSozialabgaben = Math.round((rentenversicherung + arbeitslosenversicherung + krankenversicherung + pflegeversicherung) * 100) / 100;
     // Vorsorgepauschale berechnen
-    const vorsorgepauschale = calculateVorsorgepauschale(rentenversicherung, krankenversicherung, pflegeversicherung);
+    const vorsorgepauschale = calculateVorsorgepauschale(rentenversicherung, arbeitslosenversicherung, krankenversicherung, pflegeversicherung);
     return {
         rentenversicherung,
         arbeitslosenversicherung,
