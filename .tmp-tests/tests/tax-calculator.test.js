@@ -6,9 +6,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const node_test_1 = __importDefault(require("node:test"));
 const strict_1 = __importDefault(require("node:assert/strict"));
 const tax_calculator_1 = require("../lib/tax-calculator");
-function runScenario(bruttoJahr, steuerklasse) {
+function runScenario(bruttoJahr, steuerklasse, taxProfileId = "2026_legacy") {
     return (0, tax_calculator_1.calculateTax)({
         bruttoJahr,
+        taxProfileId,
         steuerklasse,
         kirchensteuer: false,
         kirchensteuerSatz: 0.09,
@@ -72,6 +73,25 @@ function runScenario(bruttoJahr, steuerklasse) {
     const stklI = runScenario(50000, "I");
     const stklII = runScenario(50000, "II");
     strict_1.default.ok(stklII.lohnsteuer < stklI.lohnsteuer);
+});
+(0, node_test_1.default)("Profile sind verfuegbar und auswählbar", () => {
+    const profiles = (0, tax_calculator_1.getTaxProfiles)();
+    strict_1.default.ok(profiles.length >= 2);
+    strict_1.default.ok(profiles.some((p) => p.id === "2026_current"));
+    strict_1.default.ok(profiles.some((p) => p.id === "2026_legacy"));
+});
+(0, node_test_1.default)("Profilwechsel aendert das Ergebnis", () => {
+    const legacy = runScenario(77700, "I", "2026_legacy");
+    const current = runScenario(77700, "I", "2026_current");
+    strict_1.default.notEqual(legacy.lohnsteuer, current.lohnsteuer);
+});
+(0, node_test_1.default)("Aktives Profil wird im Ergebnis zurueckgegeben", () => {
+    const result = runScenario(50000, "I", "2026_current");
+    strict_1.default.equal(result.taxProfileId, "2026_current");
+});
+(0, node_test_1.default)("Konfigurationswerte sind einsehbar", () => {
+    const config = (0, tax_calculator_1.getTaxProfileConfig)("2026_current");
+    strict_1.default.equal(config.zone1End, 17799);
 });
 (0, node_test_1.default)("Negative Eingaben werfen einen Fehler", () => {
     strict_1.default.throws(() => (0, tax_calculator_1.calculateTax)({

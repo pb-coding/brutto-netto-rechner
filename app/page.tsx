@@ -18,9 +18,12 @@ import {
   calculateTax,
   generateWhatIfData,
   generateProgressionData,
+  getTaxProfileConfig,
+  getTaxProfiles,
   formatCurrency,
   formatPercent,
   TaxInput,
+  TaxProfileId,
   Steuerklasse,
 } from "@/lib/tax-calculator";
 import {
@@ -63,8 +66,10 @@ const steuerklasseOptions: { value: Steuerklasse; label: string; description: st
 ];
 
 export default function TaxDashboard() {
+  const taxProfiles = useMemo(() => getTaxProfiles(), []);
   // Input states
   const [bruttoJahr, setBruttoJahr] = useState<number>(60000);
+  const [taxProfileId, setTaxProfileId] = useState<TaxProfileId>("2026_current");
   const [steuerklasse, setSteuerklasse] = useState<Steuerklasse>("I");
   const [kirchensteuer, setKirchensteuer] = useState<boolean>(false);
   const [kirchensteuerSatz, setKirchensteuerSatz] = useState<number>(9);
@@ -77,6 +82,7 @@ export default function TaxDashboard() {
   const taxInput: TaxInput = useMemo(
     () => ({
       bruttoJahr,
+      taxProfileId,
       steuerklasse,
       kirchensteuer,
       kirchensteuerSatz: kirchensteuerSatz / 100,
@@ -85,15 +91,13 @@ export default function TaxDashboard() {
       kinderAnzahl,
       alter,
     }),
-    [bruttoJahr, steuerklasse, kirchensteuer, kirchensteuerSatz, zusatzbeitrag, werbungskosten, kinderAnzahl, alter]
+    [bruttoJahr, taxProfileId, steuerklasse, kirchensteuer, kirchensteuerSatz, zusatzbeitrag, werbungskosten, kinderAnzahl, alter]
   );
 
   const taxResult = useMemo(() => calculateTax(taxInput), [taxInput]);
   const whatIfData = useMemo(() => generateWhatIfData(taxInput), [taxInput]);
-  const progressionData = useMemo(() => generateProgressionData(), []);
-
-  // Format numbers
-  const formatNumber = (num: number) => new Intl.NumberFormat("de-DE").format(num);
+  const progressionData = useMemo(() => generateProgressionData(taxProfileId), [taxProfileId]);
+  const activeProfile = useMemo(() => getTaxProfileConfig(taxProfileId), [taxProfileId]);
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
@@ -106,13 +110,13 @@ export default function TaxDashboard() {
                 <Calculator className="h-6 w-6 text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-white">Lohnsteuer Rechner 2026</h1>
+                <h1 className="text-xl font-bold text-white">Lohnsteuer Rechner</h1>
                 <p className="text-sm text-zinc-400">Berechnung nach deutschem EStG</p>
               </div>
             </div>
             <div className="hidden sm:block text-right">
-              <p className="text-sm text-zinc-400">Steuerjahr</p>
-              <p className="text-lg font-bold text-blue-400">2026</p>
+              <p className="text-sm text-zinc-400">Berechnungsprofil</p>
+              <p className="text-lg font-bold text-blue-400">{activeProfile.label}</p>
             </div>
           </div>
         </div>
@@ -122,6 +126,43 @@ export default function TaxDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Left Column - Inputs */}
           <div className="lg:col-span-4 space-y-6">
+            {/* Berechnungsprofil */}
+            <Card className="bg-zinc-900 border-zinc-800 shadow-xl">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-lg flex items-center gap-2 text-white">
+                  <Info className="h-5 w-5 text-blue-400" />
+                  Berechnungsprofil
+                </CardTitle>
+                <CardDescription className="text-zinc-400">
+                  Wählen Sie die zugrundeliegenden Rechenwerte.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Select value={taxProfileId} onValueChange={(v) => setTaxProfileId(v as TaxProfileId)}>
+                  <SelectTrigger className="bg-zinc-950 border-zinc-700 text-white h-12">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-zinc-900 border-zinc-700">
+                    {taxProfiles.map((profile) => (
+                      <SelectItem
+                        key={profile.id}
+                        value={profile.id}
+                        className="text-white hover:bg-zinc-800 focus:bg-zinc-800 focus:text-white"
+                      >
+                        <div className="flex flex-col">
+                          <span className="font-medium">{profile.label}</span>
+                          <span className="text-xs text-zinc-400">{profile.description}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-zinc-500">
+                  Aktives Steuerjahr: {activeProfile.year}
+                </p>
+              </CardContent>
+            </Card>
+
             {/* Brutto Input */}
             <Card className="bg-zinc-900 border-zinc-800 shadow-xl">
               <CardHeader className="pb-4">
@@ -385,6 +426,51 @@ export default function TaxDashboard() {
 
           {/* Right Column - Results */}
           <div className="lg:col-span-8 space-y-6">
+            <Card className="bg-zinc-900 border-zinc-800 shadow-xl">
+              <CardHeader>
+                <CardTitle className="text-white">Verwendete Berechnungswerte</CardTitle>
+                <CardDescription className="text-zinc-400">
+                  Transparente Parameter des aktiven Profils ({activeProfile.label}).
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div className="p-3 bg-zinc-800/50 rounded-lg">
+                    <p className="text-zinc-500">Grundfreibetrag</p>
+                    <p className="text-white font-medium">{formatCurrency(activeProfile.grundfreibetrag)}</p>
+                  </div>
+                  <div className="p-3 bg-zinc-800/50 rounded-lg">
+                    <p className="text-zinc-500">Zone 1 Ende</p>
+                    <p className="text-white font-medium">{formatCurrency(activeProfile.zone1End)}</p>
+                  </div>
+                  <div className="p-3 bg-zinc-800/50 rounded-lg">
+                    <p className="text-zinc-500">42%-Schwelle</p>
+                    <p className="text-white font-medium">{formatCurrency(activeProfile.zone2End + 1)}</p>
+                  </div>
+                  <div className="p-3 bg-zinc-800/50 rounded-lg">
+                    <p className="text-zinc-500">45%-Schwelle</p>
+                    <p className="text-white font-medium">{formatCurrency(activeProfile.zone3End + 1)}</p>
+                  </div>
+                  <div className="p-3 bg-zinc-800/50 rounded-lg">
+                    <p className="text-zinc-500">RV/AV BBG</p>
+                    <p className="text-white font-medium">{formatCurrency(activeProfile.rvBeitragsbemessungsgrenze)}</p>
+                  </div>
+                  <div className="p-3 bg-zinc-800/50 rounded-lg">
+                    <p className="text-zinc-500">KV/PV BBG</p>
+                    <p className="text-white font-medium">{formatCurrency(activeProfile.kvBeitragsbemessungsgrenze)}</p>
+                  </div>
+                  <div className="p-3 bg-zinc-800/50 rounded-lg">
+                    <p className="text-zinc-500">Soli-Freigrenze</p>
+                    <p className="text-white font-medium">{formatCurrency(activeProfile.soliFreigrenze)}</p>
+                  </div>
+                  <div className="p-3 bg-zinc-800/50 rounded-lg">
+                    <p className="text-zinc-500">36€-Rundung</p>
+                    <p className="text-white font-medium">{activeProfile.vorsorgepauschaleRundung} €</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Summary Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <Card className="bg-gradient-to-br from-zinc-900 to-zinc-900/80 border-zinc-800">
@@ -687,7 +773,7 @@ export default function TaxDashboard() {
               <TabsContent value="progression" className="mt-4">
                 <Card className="bg-zinc-900 border-zinc-800 shadow-xl">
                   <CardHeader>
-                    <CardTitle className="text-white">Steuerprogression 2026</CardTitle>
+                    <CardTitle className="text-white">Steuerprogression {activeProfile.year}</CardTitle>
                     <CardDescription className="text-zinc-400">
                       Grenzsteuersatz und Durchschnittssteuersatz nach Einkommen
                     </CardDescription>
@@ -751,22 +837,22 @@ export default function TaxDashboard() {
                     <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                       <div className="p-3 bg-zinc-800/50 rounded-lg">
                         <p className="text-zinc-500">Grundfreibetrag</p>
-                        <p className="text-white font-medium">12.348 €</p>
+                        <p className="text-white font-medium">{formatCurrency(activeProfile.grundfreibetrag)}</p>
                         <p className="text-xs text-zinc-600">0% Steuer</p>
                       </div>
                       <div className="p-3 bg-zinc-800/50 rounded-lg">
                         <p className="text-zinc-500">Zone 1 Ende</p>
-                        <p className="text-white font-medium">17.799 €</p>
+                        <p className="text-white font-medium">{formatCurrency(activeProfile.zone1End)}</p>
                         <p className="text-xs text-zinc-600">bis ~14% Grenzsteuer</p>
                       </div>
                       <div className="p-3 bg-zinc-800/50 rounded-lg">
                         <p className="text-zinc-500">Spitzensteuersatz</p>
-                        <p className="text-white font-medium">69.878 €</p>
+                        <p className="text-white font-medium">{formatCurrency(activeProfile.zone2End + 1)}</p>
                         <p className="text-xs text-zinc-600">42% Grenzsteuer</p>
                       </div>
                       <div className="p-3 bg-zinc-800/50 rounded-lg">
                         <p className="text-zinc-500">Reichensteuer</p>
-                        <p className="text-white font-medium">277.826 €</p>
+                        <p className="text-white font-medium">{formatCurrency(activeProfile.zone3End + 1)}</p>
                         <p className="text-xs text-zinc-600">45% Grenzsteuer</p>
                       </div>
                     </div>
@@ -780,7 +866,7 @@ export default function TaxDashboard() {
         {/* Footer */}
         <footer className="mt-12 pt-8 border-t border-zinc-800 text-center">
           <p className="text-sm text-zinc-500">
-            Berechnung nach §32a EStG für das Steuerjahr 2026. Alle Angaben ohne Gewähr.
+            Berechnung nach §32a EStG im gewählten Profil. Alle Angaben ohne Gewähr.
           </p>
           <p className="text-xs text-zinc-600 mt-2">
             Die Berechnung dient als Orientierung. Für verbindliche Auskünfte konsultieren Sie einen Steuerberater.

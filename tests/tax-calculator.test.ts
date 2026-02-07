@@ -1,11 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { calculateTax, Steuerklasse } from "../lib/tax-calculator";
+import { calculateTax, getTaxProfileConfig, getTaxProfiles, Steuerklasse, TaxProfileId } from "../lib/tax-calculator";
 
-function runScenario(bruttoJahr: number, steuerklasse: Steuerklasse) {
+function runScenario(bruttoJahr: number, steuerklasse: Steuerklasse, taxProfileId: TaxProfileId = "2026_legacy") {
   return calculateTax({
     bruttoJahr,
+    taxProfileId,
     steuerklasse,
     kirchensteuer: false,
     kirchensteuerSatz: 0.09,
@@ -77,6 +78,29 @@ test("Steuerklasse II entlastet gegenueber Steuerklasse I", () => {
   const stklI = runScenario(50000, "I");
   const stklII = runScenario(50000, "II");
   assert.ok(stklII.lohnsteuer < stklI.lohnsteuer);
+});
+
+test("Profile sind verfuegbar und auswählbar", () => {
+  const profiles = getTaxProfiles();
+  assert.ok(profiles.length >= 2);
+  assert.ok(profiles.some((p) => p.id === "2026_current"));
+  assert.ok(profiles.some((p) => p.id === "2026_legacy"));
+});
+
+test("Profilwechsel aendert das Ergebnis", () => {
+  const legacy = runScenario(77700, "I", "2026_legacy");
+  const current = runScenario(77700, "I", "2026_current");
+  assert.notEqual(legacy.lohnsteuer, current.lohnsteuer);
+});
+
+test("Aktives Profil wird im Ergebnis zurueckgegeben", () => {
+  const result = runScenario(50000, "I", "2026_current");
+  assert.equal(result.taxProfileId, "2026_current");
+});
+
+test("Konfigurationswerte sind einsehbar", () => {
+  const config = getTaxProfileConfig("2026_current");
+  assert.equal(config.zone1End, 17799);
 });
 
 test("Negative Eingaben werfen einen Fehler", () => {

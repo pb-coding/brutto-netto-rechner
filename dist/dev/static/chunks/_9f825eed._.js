@@ -703,78 +703,129 @@ if (typeof globalThis.$RefreshHelpers$ === 'object' && globalThis.$RefreshHelper
     "generateProgressionData",
     ()=>generateProgressionData,
     "generateWhatIfData",
-    ()=>generateWhatIfData
+    ()=>generateWhatIfData,
+    "getTaxProfileConfig",
+    ()=>getTaxProfileConfig,
+    "getTaxProfiles",
+    ()=>getTaxProfiles
 ]);
 function roundToCents(value) {
     return Math.round(value * 100) / 100;
 }
-// 2026 Tax Parameters (based on official §32a EStG and Sozialversicherungsrechengrößen)
-// Sources:
-// - §32a EStG: https://www.gesetze-im-internet.de/estg/__32a.html
-// - BBG 2026: https://www.bundesregierung.de/breg-de/aktuelles/beitragsgemessungsgrenzen-2386514
-const TAX_2026 = {
-    // Basic allowance (Grundfreibetrag) - §32a Abs. 1 Nr. 1 EStG
-    grundfreibetrag: 12348,
-    // Werbungskosten Pauschbetrag - §9a Abs. 1 Nr. 1 EStG
-    werbungskostenPauschbetrag: 1230,
-    // Sonderausgaben Pauschbetrag - §10c EStG
-    sonderausgabenPauschbetrag: 36,
-    // Entlastungsbetrag für Alleinerziehende (Steuerklasse II) - §24b EStG
-    entlastungsbetragAlleinerziehende: 4260,
-    // Tax bracket thresholds (Progressionszonen) - §32a Abs. 1 EStG
-    zone1End: 17443,
-    zone2End: 68480,
-    zone3End: 277825,
-    // Social insurance rates and limits
-    rvBeitragssatz: 0.186,
-    rvBeitragsbemessungsgrenze: 101400,
-    avBeitragssatz: 0.026,
-    avBeitragsbemessungsgrenze: 101400,
-    kvBeitragssatz: 0.146,
-    kvBeitragsbemessungsgrenze: 69750,
-    // Pflegeversicherung - 2026 (offizielle Werte)
-    pvBeitragssatz: 0.036,
-    pvBeitragsbemessungsgrenze: 69750,
-    pvArbeitnehmerAnteilBasis: 0.018,
-    pvKinderlosenzuschlag: 0.006,
-    pvKinderabschlag: 0.0025,
-    // Soli - §4 SolZG
-    soliFreigrenze: 20350,
-    soliMinderungssatz: 0.119,
-    soliSatz: 0.055,
-    // Vorsorgepauschale - §39b EStG
-    vorsorgepauschaleRundung: 36,
-    // Grenzwerte für Steuerklassen V/VI - §39b Abs. 2 Satz 7 EStG / PAP 2026
-    stkl5Grenze1: 14071,
-    stkl5Grenze2: 34939,
-    stkl5Grenze3: 222260
+const DEFAULT_TAX_PROFILE = "2026_current";
+const TAX_PROFILES = {
+    // §32a EStG 2026 (aktuell)
+    "2026_current": {
+        year: 2026,
+        label: "2026 (Aktuell §32a)",
+        description: "Aktuelle Tarifwerte 2026.",
+        grundfreibetrag: 12348,
+        zone1End: 17799,
+        zone2End: 69878,
+        zone3End: 277825,
+        zone2CoeffA: 914.51,
+        zone3CoeffA: 173.1,
+        zone3Base: 1034.87,
+        zone4Offset: 11135.63,
+        zone5Offset: 19470.38,
+        werbungskostenPauschbetrag: 1230,
+        sonderausgabenPauschbetrag: 36,
+        entlastungsbetragAlleinerziehende: 4260,
+        rvBeitragssatz: 0.186,
+        rvBeitragsbemessungsgrenze: 101400,
+        avBeitragssatz: 0.026,
+        avBeitragsbemessungsgrenze: 101400,
+        kvBeitragssatz: 0.146,
+        kvBeitragsbemessungsgrenze: 69750,
+        pvBeitragssatz: 0.036,
+        pvBeitragsbemessungsgrenze: 69750,
+        pvArbeitnehmerAnteilBasis: 0.018,
+        pvKinderlosenzuschlag: 0.006,
+        pvKinderabschlag: 0.0025,
+        soliFreigrenze: 20350,
+        soliMinderungssatz: 0.119,
+        soliSatz: 0.055,
+        vorsorgepauschaleRundung: 36,
+        stkl5Grenze1: 14071,
+        stkl5Grenze2: 34939,
+        stkl5Grenze3: 222260,
+        avVorsorgeFaktor: 0.235
+    },
+    // Kompatibilitätsprofil für ältere externe Rechner
+    "2026_legacy": {
+        year: 2026,
+        label: "2026 (Legacy-Kompatibel)",
+        description: "Kompatibilitätsprofil für ältere Vergleichsrechner.",
+        grundfreibetrag: 12348,
+        zone1End: 17443,
+        zone2End: 68480,
+        zone3End: 277825,
+        zone2CoeffA: 932.3,
+        zone3CoeffA: 176.64,
+        zone3Base: 1015.13,
+        zone4Offset: 10911.92,
+        zone5Offset: 19185.88,
+        werbungskostenPauschbetrag: 1230,
+        sonderausgabenPauschbetrag: 36,
+        entlastungsbetragAlleinerziehende: 4260,
+        rvBeitragssatz: 0.186,
+        rvBeitragsbemessungsgrenze: 101400,
+        avBeitragssatz: 0.026,
+        avBeitragsbemessungsgrenze: 101400,
+        kvBeitragssatz: 0.146,
+        kvBeitragsbemessungsgrenze: 69750,
+        pvBeitragssatz: 0.036,
+        pvBeitragsbemessungsgrenze: 69750,
+        pvArbeitnehmerAnteilBasis: 0.018,
+        pvKinderlosenzuschlag: 0.006,
+        pvKinderabschlag: 0.0025,
+        soliFreigrenze: 20350,
+        soliMinderungssatz: 0.119,
+        soliSatz: 0.055,
+        vorsorgepauschaleRundung: 36,
+        stkl5Grenze1: 14071,
+        stkl5Grenze2: 34939,
+        stkl5Grenze3: 222260,
+        avVorsorgeFaktor: 0.235
+    }
 };
+function getTaxProfiles() {
+    return Object.keys(TAX_PROFILES).map((id)=>({
+            id,
+            year: TAX_PROFILES[id].year,
+            label: TAX_PROFILES[id].label,
+            description: TAX_PROFILES[id].description
+        }));
+}
+function getTaxProfileConfig(profileId) {
+    return TAX_PROFILES[profileId ?? DEFAULT_TAX_PROFILE];
+}
 /**
  * §32a EStG - Einkommensteuertarif 2026
  * Calculates income tax based on official formula
- */ function calculateTarif(zve) {
+ */ function calculateTarif(zve, taxConfig) {
     // Round down to full Euro (§32a Abs. 1 S. 1 EStG)
     const x = Math.floor(zve);
     let steuer = 0;
-    if (x <= TAX_2026.grundfreibetrag) {
+    if (x <= taxConfig.grundfreibetrag) {
         // Grundfreibetrag - No tax (§32a Abs. 1 Nr. 1)
         steuer = 0;
-    } else if (x <= TAX_2026.zone1End) {
+    } else if (x <= taxConfig.zone1End) {
         // Zone 2: 12.349 - 17.443 € (§32a Abs. 1 Nr. 2)
         // y = 1/10.000 of amount exceeding Grundfreibetrag
-        const y = (x - TAX_2026.grundfreibetrag) / 10000;
-        steuer = (932.30 * y + 1400) * y;
-    } else if (x <= TAX_2026.zone2End) {
+        const y = (x - taxConfig.grundfreibetrag) / 10000;
+        steuer = (taxConfig.zone2CoeffA * y + 1400) * y;
+    } else if (x <= taxConfig.zone2End) {
         // Zone 3: 17.444 - 68.480 € (§32a Abs. 1 Nr. 3)
         // z = 1/10.000 of amount exceeding 17.443 €
-        const z = (x - 17443) / 10000;
-        steuer = (176.64 * z + 2397) * z + 1015.13;
-    } else if (x <= TAX_2026.zone3End) {
+        const z = (x - taxConfig.zone1End) / 10000;
+        steuer = (taxConfig.zone3CoeffA * z + 2397) * z + taxConfig.zone3Base;
+    } else if (x <= taxConfig.zone3End) {
         // Zone 4: Proportional zone 42% (§32a Abs. 1 Nr. 4)
-        steuer = 0.42 * x - 10911.92;
+        steuer = 0.42 * x - taxConfig.zone4Offset;
     } else {
         // Zone 5: Reichensteuer 45% (§32a Abs. 1 Nr. 5)
-        steuer = 0.45 * x - 19185.88;
+        steuer = 0.45 * x - taxConfig.zone5Offset;
     }
     // Cent-genaue Ausgabe für Jahresvergleich mit externen Rechnern
     return Math.max(0, roundToCents(steuer));
@@ -782,28 +833,28 @@ const TAX_2026 = {
 /**
  * §39b Abs. 2 Satz 7 EStG - Spezialtarif für Steuerklassen V und VI
  * Umsetzung gemäß PAP 2026 (MST5-6/UP5-6).
- */ function calculateTarifClassFiveSix(zve) {
+ */ function calculateTarifClassFiveSix(zve, taxConfig) {
     const zzx = Math.floor(zve);
-    const zx = Math.min(zzx, TAX_2026.stkl5Grenze2);
-    let st = calculateUp56(zx);
-    if (zzx > TAX_2026.stkl5Grenze2) {
-        if (zzx > TAX_2026.stkl5Grenze3) {
-            st = Math.floor(st + (TAX_2026.stkl5Grenze3 - TAX_2026.stkl5Grenze2) * 0.42 + (zzx - TAX_2026.stkl5Grenze3) * 0.45);
+    const zx = Math.min(zzx, taxConfig.stkl5Grenze2);
+    let st = calculateUp56(zx, taxConfig);
+    if (zzx > taxConfig.stkl5Grenze2) {
+        if (zzx > taxConfig.stkl5Grenze3) {
+            st = Math.floor(st + (taxConfig.stkl5Grenze3 - taxConfig.stkl5Grenze2) * 0.42 + (zzx - taxConfig.stkl5Grenze3) * 0.45);
         } else {
-            st = Math.floor(st + (zzx - TAX_2026.stkl5Grenze2) * 0.42);
+            st = Math.floor(st + (zzx - taxConfig.stkl5Grenze2) * 0.42);
         }
     }
-    if (zzx > TAX_2026.stkl5Grenze1) {
+    if (zzx > taxConfig.stkl5Grenze1) {
         const vergl = st;
-        const stAtGrenze1 = calculateUp56(TAX_2026.stkl5Grenze1);
-        const hoch = Math.floor(stAtGrenze1 + (zzx - TAX_2026.stkl5Grenze1) * 0.42);
+        const stAtGrenze1 = calculateUp56(taxConfig.stkl5Grenze1, taxConfig);
+        const hoch = Math.floor(stAtGrenze1 + (zzx - taxConfig.stkl5Grenze1) * 0.42);
         st = Math.max(vergl, hoch);
     }
     return Math.max(0, Math.floor(st));
 }
-function calculateUp56(zx) {
-    const st1 = calculateTarif(zx * 1.25);
-    const st2 = calculateTarif(zx * 0.75);
+function calculateUp56(zx, taxConfig) {
+    const st1 = calculateTarif(zx * 1.25, taxConfig);
+    const st2 = calculateTarif(zx * 0.75, taxConfig);
     const diff = (st1 - st2) * 2;
     const mist = Math.floor(zx * 0.14);
     return Math.max(diff, mist);
@@ -811,27 +862,27 @@ function calculateUp56(zx) {
 /**
  * §32a Abs. 5 EStG - Splitting-Verfahren für Steuerklasse III
  * Berechnung: 2 × Tarif(zvE / 2)
- */ function calculateSplittingTarif(zve) {
+ */ function calculateSplittingTarif(zve, taxConfig) {
     const halvedZve = zve / 2;
-    const halvedTax = calculateTarif(halvedZve);
+    const halvedTax = calculateTarif(halvedZve, taxConfig);
     return roundToCents(2 * halvedTax);
 }
 /**
  * §39b Abs. 2 Satz 9 EStG - Abrundung auf volle 36 Euro
- */ function roundTo36(zve) {
-    return Math.floor(zve / TAX_2026.vorsorgepauschaleRundung) * TAX_2026.vorsorgepauschaleRundung;
+ */ function roundTo36(zve, taxConfig) {
+    return Math.floor(zve / taxConfig.vorsorgepauschaleRundung) * taxConfig.vorsorgepauschaleRundung;
 }
 /**
  * §4 SolZG - Solidaritätszuschlag mit Milderungszone
  * 
  * Wenn LST ≤ Freigrenze: SOLI = 0
  * Wenn LST > Freigrenze: SOLI = min(LST × 5,5%, (LST - Freigrenze) × 11,9%)
- */ function calculateSoli(lohnsteuer) {
-    if (lohnsteuer <= TAX_2026.soliFreigrenze) {
+ */ function calculateSoli(lohnsteuer, taxConfig) {
+    if (lohnsteuer <= taxConfig.soliFreigrenze) {
         return 0;
     }
-    const fullSoli = lohnsteuer * TAX_2026.soliSatz;
-    const minderungSoli = (lohnsteuer - TAX_2026.soliFreigrenze) * TAX_2026.soliMinderungssatz;
+    const fullSoli = lohnsteuer * taxConfig.soliSatz;
+    const minderungSoli = (lohnsteuer - taxConfig.soliFreigrenze) * taxConfig.soliMinderungssatz;
     return roundToCents(Math.min(fullSoli, minderungSoli));
 }
 /**
@@ -848,16 +899,16 @@ function calculateUp56(zx) {
  * - 0,25% pro Kind (2. bis 5. Kind, bis 25. Lebensjahr)
  * 
  * Mindestsatz: 1,7% (nur durch Kinderabschläge erreichbar)
- */ function calculatePVSatz(alter, kinderAnzahl) {
-    let arbeitnehmerAnteil = TAX_2026.pvArbeitnehmerAnteilBasis; // 1,8%
+ */ function calculatePVSatz(alter, kinderAnzahl, taxConfig) {
+    let arbeitnehmerAnteil = taxConfig.pvArbeitnehmerAnteilBasis; // 1,8%
     // Kinderlosenzuschlag: +0,6% ab 23 Jahren ohne Kinder
     if (alter >= 23 && kinderAnzahl === 0) {
-        arbeitnehmerAnteil += TAX_2026.pvKinderlosenzuschlag;
+        arbeitnehmerAnteil += taxConfig.pvKinderlosenzuschlag;
     }
     // Kinderabschläge: -0,25% pro Kind (2. bis 5. Kind)
     // Nur gültig für Kinder bis 25 Jahre (hier vereinfacht angenommen)
     const kinderMitAbschlag = Math.max(0, Math.min(kinderAnzahl - 1, 4)); // 2.-5. Kind = max 4 Abschläge
-    arbeitnehmerAnteil -= kinderMitAbschlag * TAX_2026.pvKinderabschlag;
+    arbeitnehmerAnteil -= kinderMitAbschlag * taxConfig.pvKinderabschlag;
     // Mindestsatz sicherstellen
     return Math.max(0.017, arbeitnehmerAnteil);
 }
@@ -869,11 +920,11 @@ function calculateUp56(zx) {
  * b) Teilbetrag für Kranken- und Pflegeversicherung (Basistarif)
  * 
  * Vereinfachte Berechnung für Lohnsteuerzwecke
- */ function calculateVorsorgepauschale(rvBeitrag, avBeitrag, kvBeitrag, pvBeitrag) {
+ */ function calculateVorsorgepauschale(rvBeitrag, avBeitrag, kvBeitrag, pvBeitrag, taxConfig) {
     // Teilbetrag RV: AN-Anteil der Rentenversicherung
     const rvTeilbetrag = rvBeitrag;
     // Teilbetrag ALV: anteilige steuerliche Berücksichtigung im PAP-Kontext
-    const avTeilbetrag = avBeitrag * 0.235;
+    const avTeilbetrag = avBeitrag * taxConfig.avVorsorgeFaktor;
     // Teilbetrag KV/PV
     const kvPvTeilbetrag = kvBeitrag + pvBeitrag;
     const vorsorgepauschale = rvTeilbetrag + avTeilbetrag + kvPvTeilbetrag;
@@ -881,24 +932,24 @@ function calculateUp56(zx) {
 }
 /**
  * Berechnung der Sozialabgaben
- */ function calculateSozialabgaben(brutto, zusatzbeitrag, alter, kinderAnzahl) {
+ */ function calculateSozialabgaben(brutto, zusatzbeitrag, alter, kinderAnzahl, taxConfig) {
     // Rentenversicherung - 9,3% AN-Anteil
-    const rvBasis = Math.min(brutto, TAX_2026.rvBeitragsbemessungsgrenze);
-    const rentenversicherung = Math.round(rvBasis * (TAX_2026.rvBeitragssatz / 2) * 100) / 100;
+    const rvBasis = Math.min(brutto, taxConfig.rvBeitragsbemessungsgrenze);
+    const rentenversicherung = Math.round(rvBasis * (taxConfig.rvBeitragssatz / 2) * 100) / 100;
     // Arbeitslosenversicherung - 1,3% AN-Anteil
-    const avBasis = Math.min(brutto, TAX_2026.avBeitragsbemessungsgrenze);
-    const arbeitslosenversicherung = Math.round(avBasis * (TAX_2026.avBeitragssatz / 2) * 100) / 100;
+    const avBasis = Math.min(brutto, taxConfig.avBeitragsbemessungsgrenze);
+    const arbeitslosenversicherung = Math.round(avBasis * (taxConfig.avBeitragssatz / 2) * 100) / 100;
     // Krankenversicherung - 7,3% + halber Zusatzbeitrag
-    const kvBasis = Math.min(brutto, TAX_2026.kvBeitragsbemessungsgrenze);
-    const kvSatz = TAX_2026.kvBeitragssatz / 2 + zusatzbeitrag / 100 / 2;
+    const kvBasis = Math.min(brutto, taxConfig.kvBeitragsbemessungsgrenze);
+    const kvSatz = taxConfig.kvBeitragssatz / 2 + zusatzbeitrag / 100 / 2;
     const krankenversicherung = Math.round(kvBasis * kvSatz * 100) / 100;
     // Pflegeversicherung - PUEG Reform 2026
-    const pvBasis = Math.min(brutto, TAX_2026.pvBeitragsbemessungsgrenze);
-    const pvSatz = calculatePVSatz(alter, kinderAnzahl);
+    const pvBasis = Math.min(brutto, taxConfig.pvBeitragsbemessungsgrenze);
+    const pvSatz = calculatePVSatz(alter, kinderAnzahl, taxConfig);
     const pflegeversicherung = Math.round(pvBasis * pvSatz * 100) / 100;
     const gesamtSozialabgaben = Math.round((rentenversicherung + arbeitslosenversicherung + krankenversicherung + pflegeversicherung) * 100) / 100;
     // Vorsorgepauschale berechnen
-    const vorsorgepauschale = calculateVorsorgepauschale(rentenversicherung, arbeitslosenversicherung, krankenversicherung, pflegeversicherung);
+    const vorsorgepauschale = calculateVorsorgepauschale(rentenversicherung, arbeitslosenversicherung, krankenversicherung, pflegeversicherung, taxConfig);
     return {
         rentenversicherung,
         arbeitslosenversicherung,
@@ -909,7 +960,9 @@ function calculateUp56(zx) {
     };
 }
 function calculateTax(input) {
-    const { bruttoJahr, steuerklasse, kirchensteuer, kirchensteuerSatz, zusatzbeitrag, werbungskosten, kinderAnzahl, alter } = input;
+    const { bruttoJahr, taxProfileId, steuerklasse, kirchensteuer, kirchensteuerSatz, zusatzbeitrag, werbungskosten, kinderAnzahl, alter } = input;
+    const resolvedTaxProfileId = taxProfileId ?? DEFAULT_TAX_PROFILE;
+    const taxConfig = getTaxProfileConfig(resolvedTaxProfileId);
     if (!Number.isFinite(bruttoJahr) || bruttoJahr < 0) {
         throw new Error("bruttoJahr muss eine nicht-negative Zahl sein.");
     }
@@ -926,17 +979,17 @@ function calculateTax(input) {
         throw new Error("alter muss eine nicht-negative Zahl sein.");
     }
     // Sozialabgaben berechnen
-    const sozialabgaben = calculateSozialabgaben(bruttoJahr, zusatzbeitrag, alter, kinderAnzahl);
+    const sozialabgaben = calculateSozialabgaben(bruttoJahr, zusatzbeitrag, alter, kinderAnzahl, taxConfig);
     // Zu versteuerndes Einkommen berechnen
     let zve = bruttoJahr;
     // Werbungskosten und Sonderausgaben gelten in Steuerklassen I bis V
-    const effectiveWerbungskosten = steuerklasse === "VI" ? 0 : Math.max(TAX_2026.werbungskostenPauschbetrag, werbungskosten);
+    const effectiveWerbungskosten = steuerklasse === "VI" ? 0 : Math.max(taxConfig.werbungskostenPauschbetrag, werbungskosten);
     zve -= effectiveWerbungskosten;
-    const effectiveSonderausgaben = steuerklasse === "VI" ? 0 : TAX_2026.sonderausgabenPauschbetrag;
+    const effectiveSonderausgaben = steuerklasse === "VI" ? 0 : taxConfig.sonderausgabenPauschbetrag;
     zve -= effectiveSonderausgaben;
     // Entlastungsbetrag für Steuerklasse II
     if (steuerklasse === "II") {
-        zve -= TAX_2026.entlastungsbetragAlleinerziehende;
+        zve -= taxConfig.entlastungsbetragAlleinerziehende;
     }
     // Vorsorgepauschale
     zve -= sozialabgaben.vorsorgepauschale;
@@ -952,26 +1005,26 @@ function calculateTax(input) {
         case "IV":
             // Standard-Tarif
             // §39b Abs. 2 Satz 9: Abrundung auf volle 36 Euro
-            zvEForLohnsteuer = roundTo36(zve);
-            lohnsteuer = calculateTarif(zvEForLohnsteuer);
+            zvEForLohnsteuer = roundTo36(zve, taxConfig);
+            lohnsteuer = calculateTarif(zvEForLohnsteuer, taxConfig);
             break;
         case "III":
             // Splitting-Verfahren: 2 × Tarif(zvE / 2)
-            zvEForLohnsteuer = roundTo36(zve);
-            lohnsteuer = calculateSplittingTarif(zvEForLohnsteuer);
+            zvEForLohnsteuer = roundTo36(zve, taxConfig);
+            lohnsteuer = calculateSplittingTarif(zvEForLohnsteuer, taxConfig);
             break;
         case "V":
         case "VI":
             // Spezialtarif für StKl V/VI gemäß §39b Abs. 2 Satz 7
-            zvEForLohnsteuer = roundTo36(zve);
-            lohnsteuer = calculateTarifClassFiveSix(zvEForLohnsteuer);
+            zvEForLohnsteuer = roundTo36(zve, taxConfig);
+            lohnsteuer = calculateTarifClassFiveSix(zvEForLohnsteuer, taxConfig);
             break;
         default:
-            zvEForLohnsteuer = roundTo36(zve);
-            lohnsteuer = calculateTarif(zvEForLohnsteuer);
+            zvEForLohnsteuer = roundTo36(zve, taxConfig);
+            lohnsteuer = calculateTarif(zvEForLohnsteuer, taxConfig);
     }
     // Solidaritätszuschlag mit Milderungszone
-    const solidaritaetszuschlag = calculateSoli(lohnsteuer);
+    const solidaritaetszuschlag = calculateSoli(lohnsteuer, taxConfig);
     // Kirchensteuer
     const kirchensteuerBetrag = calculateKirchensteuer(lohnsteuer, kirchensteuer, kirchensteuerSatz);
     const gesamtSteuern = lohnsteuer + solidaritaetszuschlag + kirchensteuerBetrag;
@@ -979,6 +1032,7 @@ function calculateTax(input) {
     const nettoJahr = bruttoJahr - gesamtAbzuege;
     return {
         bruttoJahr,
+        taxProfileId: resolvedTaxProfileId,
         steuerklasse,
         ...sozialabgaben,
         werbungskostenPauschbetrag: effectiveWerbungskosten,
@@ -1013,12 +1067,14 @@ function generateWhatIfData(input) {
     }
     return data;
 }
-function generateProgressionData() {
+function generateProgressionData(taxProfileId) {
+    const taxConfig = getTaxProfileConfig(taxProfileId);
     const data = [];
     for(let einkommen = 0; einkommen <= 300000; einkommen += 1000){
         // Calculate tax for this income level
         const result = calculateTax({
             bruttoJahr: einkommen,
+            taxProfileId,
             steuerklasse: "I",
             kirchensteuer: false,
             kirchensteuerSatz: 0.09,
@@ -1033,20 +1089,20 @@ function generateProgressionData() {
         // This gives the theoretical marginal rate at each point
         let grenzsteuersatz = 0;
         const zve = result.zuVersteuerndesEinkommen;
-        if (zve <= TAX_2026.grundfreibetrag) {
+        if (zve <= taxConfig.grundfreibetrag) {
             // Zone 1: 0%
             grenzsteuersatz = 0;
-        } else if (zve <= TAX_2026.zone1End) {
+        } else if (zve <= taxConfig.zone1End) {
             // Zone 2: Progressing from ~14% to ~24%
             // Formula: (1864.60 * y + 1400) / 10000 where y = (zvE - GFB) / 10000
-            const y = (zve - TAX_2026.grundfreibetrag) / 10000;
-            grenzsteuersatz = (1864.60 * y + 1400) / 100;
-        } else if (zve <= TAX_2026.zone2End) {
+            const y = (zve - taxConfig.grundfreibetrag) / 10000;
+            grenzsteuersatz = (2 * taxConfig.zone2CoeffA * y + 1400) / 100;
+        } else if (zve <= taxConfig.zone2End) {
             // Zone 3: Progressing from ~24% to ~42%
             // Formula: (353.28 * z + 2397) / 10000 where z = (zvE - 17443) / 10000
-            const z = (zve - 17443) / 10000;
-            grenzsteuersatz = (353.28 * z + 2397) / 100;
-        } else if (zve <= TAX_2026.zone3End) {
+            const z = (zve - taxConfig.zone1End) / 10000;
+            grenzsteuersatz = (2 * taxConfig.zone3CoeffA * z + 2397) / 100;
+        } else if (zve <= taxConfig.zone3End) {
             // Zone 4: Flat 42%
             grenzsteuersatz = 42;
         } else {
@@ -1168,8 +1224,12 @@ const steuerklasseOptions = [
 ];
 function TaxDashboard() {
     _s();
+    const taxProfiles = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useMemo"])({
+        "TaxDashboard.useMemo[taxProfiles]": ()=>(0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["getTaxProfiles"])()
+    }["TaxDashboard.useMemo[taxProfiles]"], []);
     // Input states
     const [bruttoJahr, setBruttoJahr] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(60000);
+    const [taxProfileId, setTaxProfileId] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])("2026_current");
     const [steuerklasse, setSteuerklasse] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])("I");
     const [kirchensteuer, setKirchensteuer] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(false);
     const [kirchensteuerSatz, setKirchensteuerSatz] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(9);
@@ -1181,6 +1241,7 @@ function TaxDashboard() {
     const taxInput = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useMemo"])({
         "TaxDashboard.useMemo[taxInput]": ()=>({
                 bruttoJahr,
+                taxProfileId,
                 steuerklasse,
                 kirchensteuer,
                 kirchensteuerSatz: kirchensteuerSatz / 100,
@@ -1191,6 +1252,7 @@ function TaxDashboard() {
             })
     }["TaxDashboard.useMemo[taxInput]"], [
         bruttoJahr,
+        taxProfileId,
         steuerklasse,
         kirchensteuer,
         kirchensteuerSatz,
@@ -1210,10 +1272,15 @@ function TaxDashboard() {
         taxInput
     ]);
     const progressionData = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useMemo"])({
-        "TaxDashboard.useMemo[progressionData]": ()=>(0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["generateProgressionData"])()
-    }["TaxDashboard.useMemo[progressionData]"], []);
-    // Format numbers
-    const formatNumber = (num)=>new Intl.NumberFormat("de-DE").format(num);
+        "TaxDashboard.useMemo[progressionData]": ()=>(0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["generateProgressionData"])(taxProfileId)
+    }["TaxDashboard.useMemo[progressionData]"], [
+        taxProfileId
+    ]);
+    const activeProfile = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useMemo"])({
+        "TaxDashboard.useMemo[activeProfile]": ()=>(0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["getTaxProfileConfig"])(taxProfileId)
+    }["TaxDashboard.useMemo[activeProfile]"], [
+        taxProfileId
+    ]);
     return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
         className: "min-h-screen bg-zinc-950 text-zinc-100",
         children: [
@@ -1233,22 +1300,22 @@ function TaxDashboard() {
                                             className: "h-6 w-6 text-white"
                                         }, void 0, false, {
                                             fileName: "[project]/app/page.tsx",
-                                            lineNumber: 106,
+                                            lineNumber: 110,
                                             columnNumber: 17
                                         }, this)
                                     }, void 0, false, {
                                         fileName: "[project]/app/page.tsx",
-                                        lineNumber: 105,
+                                        lineNumber: 109,
                                         columnNumber: 15
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                         children: [
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("h1", {
                                                 className: "text-xl font-bold text-white",
-                                                children: "Lohnsteuer Rechner 2026"
+                                                children: "Lohnsteuer Rechner"
                                             }, void 0, false, {
                                                 fileName: "[project]/app/page.tsx",
-                                                lineNumber: 109,
+                                                lineNumber: 113,
                                                 columnNumber: 17
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -1256,19 +1323,19 @@ function TaxDashboard() {
                                                 children: "Berechnung nach deutschem EStG"
                                             }, void 0, false, {
                                                 fileName: "[project]/app/page.tsx",
-                                                lineNumber: 110,
+                                                lineNumber: 114,
                                                 columnNumber: 17
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/app/page.tsx",
-                                        lineNumber: 108,
+                                        lineNumber: 112,
                                         columnNumber: 15
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/app/page.tsx",
-                                lineNumber: 104,
+                                lineNumber: 108,
                                 columnNumber: 13
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1276,40 +1343,40 @@ function TaxDashboard() {
                                 children: [
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
                                         className: "text-sm text-zinc-400",
-                                        children: "Steuerjahr"
+                                        children: "Berechnungsprofil"
                                     }, void 0, false, {
                                         fileName: "[project]/app/page.tsx",
-                                        lineNumber: 114,
+                                        lineNumber: 118,
                                         columnNumber: 15
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
                                         className: "text-lg font-bold text-blue-400",
-                                        children: "2026"
+                                        children: activeProfile.label
                                     }, void 0, false, {
                                         fileName: "[project]/app/page.tsx",
-                                        lineNumber: 115,
+                                        lineNumber: 119,
                                         columnNumber: 15
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/app/page.tsx",
-                                lineNumber: 113,
+                                lineNumber: 117,
                                 columnNumber: 13
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/app/page.tsx",
-                        lineNumber: 103,
+                        lineNumber: 107,
                         columnNumber: 11
                     }, this)
                 }, void 0, false, {
                     fileName: "[project]/app/page.tsx",
-                    lineNumber: 102,
+                    lineNumber: 106,
                     columnNumber: 9
                 }, this)
             }, void 0, false, {
                 fileName: "[project]/app/page.tsx",
-                lineNumber: 101,
+                lineNumber: 105,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("main", {
@@ -1330,18 +1397,143 @@ function TaxDashboard() {
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardTitle"], {
                                                         className: "text-lg flex items-center gap-2 text-white",
                                                         children: [
+                                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$info$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__Info$3e$__["Info"], {
+                                                                className: "h-5 w-5 text-blue-400"
+                                                            }, void 0, false, {
+                                                                fileName: "[project]/app/page.tsx",
+                                                                lineNumber: 133,
+                                                                columnNumber: 19
+                                                            }, this),
+                                                            "Berechnungsprofil"
+                                                        ]
+                                                    }, void 0, true, {
+                                                        fileName: "[project]/app/page.tsx",
+                                                        lineNumber: 132,
+                                                        columnNumber: 17
+                                                    }, this),
+                                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardDescription"], {
+                                                        className: "text-zinc-400",
+                                                        children: "Wählen Sie die zugrundeliegenden Rechenwerte."
+                                                    }, void 0, false, {
+                                                        fileName: "[project]/app/page.tsx",
+                                                        lineNumber: 136,
+                                                        columnNumber: 17
+                                                    }, this)
+                                                ]
+                                            }, void 0, true, {
+                                                fileName: "[project]/app/page.tsx",
+                                                lineNumber: 131,
+                                                columnNumber: 15
+                                            }, this),
+                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardContent"], {
+                                                className: "space-y-3",
+                                                children: [
+                                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Select"], {
+                                                        value: taxProfileId,
+                                                        onValueChange: (v)=>setTaxProfileId(v),
+                                                        children: [
+                                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["SelectTrigger"], {
+                                                                className: "bg-zinc-950 border-zinc-700 text-white h-12",
+                                                                children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["SelectValue"], {}, void 0, false, {
+                                                                    fileName: "[project]/app/page.tsx",
+                                                                    lineNumber: 143,
+                                                                    columnNumber: 21
+                                                                }, this)
+                                                            }, void 0, false, {
+                                                                fileName: "[project]/app/page.tsx",
+                                                                lineNumber: 142,
+                                                                columnNumber: 19
+                                                            }, this),
+                                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["SelectContent"], {
+                                                                className: "bg-zinc-900 border-zinc-700",
+                                                                children: taxProfiles.map((profile)=>/*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["SelectItem"], {
+                                                                        value: profile.id,
+                                                                        className: "text-white hover:bg-zinc-800 focus:bg-zinc-800 focus:text-white",
+                                                                        children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                                            className: "flex flex-col",
+                                                                            children: [
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
+                                                                                    className: "font-medium",
+                                                                                    children: profile.label
+                                                                                }, void 0, false, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 153,
+                                                                                    columnNumber: 27
+                                                                                }, this),
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
+                                                                                    className: "text-xs text-zinc-400",
+                                                                                    children: profile.description
+                                                                                }, void 0, false, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 154,
+                                                                                    columnNumber: 27
+                                                                                }, this)
+                                                                            ]
+                                                                        }, void 0, true, {
+                                                                            fileName: "[project]/app/page.tsx",
+                                                                            lineNumber: 152,
+                                                                            columnNumber: 25
+                                                                        }, this)
+                                                                    }, profile.id, false, {
+                                                                        fileName: "[project]/app/page.tsx",
+                                                                        lineNumber: 147,
+                                                                        columnNumber: 23
+                                                                    }, this))
+                                                            }, void 0, false, {
+                                                                fileName: "[project]/app/page.tsx",
+                                                                lineNumber: 145,
+                                                                columnNumber: 19
+                                                            }, this)
+                                                        ]
+                                                    }, void 0, true, {
+                                                        fileName: "[project]/app/page.tsx",
+                                                        lineNumber: 141,
+                                                        columnNumber: 17
+                                                    }, this),
+                                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                        className: "text-xs text-zinc-500",
+                                                        children: [
+                                                            "Aktives Steuerjahr: ",
+                                                            activeProfile.year
+                                                        ]
+                                                    }, void 0, true, {
+                                                        fileName: "[project]/app/page.tsx",
+                                                        lineNumber: 160,
+                                                        columnNumber: 17
+                                                    }, this)
+                                                ]
+                                            }, void 0, true, {
+                                                fileName: "[project]/app/page.tsx",
+                                                lineNumber: 140,
+                                                columnNumber: 15
+                                            }, this)
+                                        ]
+                                    }, void 0, true, {
+                                        fileName: "[project]/app/page.tsx",
+                                        lineNumber: 130,
+                                        columnNumber: 13
+                                    }, this),
+                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Card"], {
+                                        className: "bg-zinc-900 border-zinc-800 shadow-xl",
+                                        children: [
+                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardHeader"], {
+                                                className: "pb-4",
+                                                children: [
+                                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardTitle"], {
+                                                        className: "text-lg flex items-center gap-2 text-white",
+                                                        children: [
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$euro$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__Euro$3e$__["Euro"], {
                                                                 className: "h-5 w-5 text-blue-400"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/page.tsx",
-                                                                lineNumber: 129,
+                                                                lineNumber: 170,
                                                                 columnNumber: 19
                                                             }, this),
                                                             "Bruttoeinkommen"
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/app/page.tsx",
-                                                        lineNumber: 128,
+                                                        lineNumber: 169,
                                                         columnNumber: 17
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardDescription"], {
@@ -1349,13 +1541,13 @@ function TaxDashboard() {
                                                         children: "Ihr jährliches Bruttoeinkommen"
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/page.tsx",
-                                                        lineNumber: 132,
+                                                        lineNumber: 173,
                                                         columnNumber: 17
                                                     }, this)
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/app/page.tsx",
-                                                lineNumber: 127,
+                                                lineNumber: 168,
                                                 columnNumber: 15
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardContent"], {
@@ -1372,7 +1564,7 @@ function TaxDashboard() {
                                                                 placeholder: "60000"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/page.tsx",
-                                                                lineNumber: 138,
+                                                                lineNumber: 179,
                                                                 columnNumber: 19
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -1380,13 +1572,13 @@ function TaxDashboard() {
                                                                 children: "€"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/page.tsx",
-                                                                lineNumber: 145,
+                                                                lineNumber: 186,
                                                                 columnNumber: 19
                                                             }, this)
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/app/page.tsx",
-                                                        lineNumber: 137,
+                                                        lineNumber: 178,
                                                         columnNumber: 17
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$slider$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Slider"], {
@@ -1400,7 +1592,7 @@ function TaxDashboard() {
                                                         className: "py-2"
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/page.tsx",
-                                                        lineNumber: 149,
+                                                        lineNumber: 190,
                                                         columnNumber: 17
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1410,27 +1602,27 @@ function TaxDashboard() {
                                                                 children: "0 €"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/page.tsx",
-                                                                lineNumber: 158,
+                                                                lineNumber: 199,
                                                                 columnNumber: 19
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                                                 children: "100.000 €"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/page.tsx",
-                                                                lineNumber: 159,
+                                                                lineNumber: 200,
                                                                 columnNumber: 19
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                                                 children: "200.000 €"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/page.tsx",
-                                                                lineNumber: 160,
+                                                                lineNumber: 201,
                                                                 columnNumber: 19
                                                             }, this)
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/app/page.tsx",
-                                                        lineNumber: 157,
+                                                        lineNumber: 198,
                                                         columnNumber: 17
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1445,30 +1637,30 @@ function TaxDashboard() {
                                                                     children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(bruttoJahr / 12)
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/app/page.tsx",
-                                                                    lineNumber: 165,
+                                                                    lineNumber: 206,
                                                                     columnNumber: 21
                                                                 }, this)
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/app/page.tsx",
-                                                            lineNumber: 163,
+                                                            lineNumber: 204,
                                                             columnNumber: 19
                                                         }, this)
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/page.tsx",
-                                                        lineNumber: 162,
+                                                        lineNumber: 203,
                                                         columnNumber: 17
                                                     }, this)
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/app/page.tsx",
-                                                lineNumber: 136,
+                                                lineNumber: 177,
                                                 columnNumber: 15
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/app/page.tsx",
-                                        lineNumber: 126,
+                                        lineNumber: 167,
                                         columnNumber: 13
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Card"], {
@@ -1483,19 +1675,19 @@ function TaxDashboard() {
                                                             className: "h-5 w-5 text-blue-400"
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/page.tsx",
-                                                            lineNumber: 175,
+                                                            lineNumber: 216,
                                                             columnNumber: 19
                                                         }, this),
                                                         "Steuerklasse"
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/app/page.tsx",
-                                                    lineNumber: 174,
+                                                    lineNumber: 215,
                                                     columnNumber: 17
                                                 }, this)
                                             }, void 0, false, {
                                                 fileName: "[project]/app/page.tsx",
-                                                lineNumber: 173,
+                                                lineNumber: 214,
                                                 columnNumber: 15
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardContent"], {
@@ -1507,12 +1699,12 @@ function TaxDashboard() {
                                                             className: "bg-zinc-950 border-zinc-700 text-white h-12",
                                                             children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["SelectValue"], {}, void 0, false, {
                                                                 fileName: "[project]/app/page.tsx",
-                                                                lineNumber: 182,
+                                                                lineNumber: 223,
                                                                 columnNumber: 21
                                                             }, this)
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/page.tsx",
-                                                            lineNumber: 181,
+                                                            lineNumber: 222,
                                                             columnNumber: 19
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["SelectContent"], {
@@ -1528,7 +1720,7 @@ function TaxDashboard() {
                                                                                 children: option.label
                                                                             }, void 0, false, {
                                                                                 fileName: "[project]/app/page.tsx",
-                                                                                lineNumber: 192,
+                                                                                lineNumber: 233,
                                                                                 columnNumber: 27
                                                                             }, this),
                                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -1536,40 +1728,40 @@ function TaxDashboard() {
                                                                                 children: option.description
                                                                             }, void 0, false, {
                                                                                 fileName: "[project]/app/page.tsx",
-                                                                                lineNumber: 193,
+                                                                                lineNumber: 234,
                                                                                 columnNumber: 27
                                                                             }, this)
                                                                         ]
                                                                     }, void 0, true, {
                                                                         fileName: "[project]/app/page.tsx",
-                                                                        lineNumber: 191,
+                                                                        lineNumber: 232,
                                                                         columnNumber: 25
                                                                     }, this)
                                                                 }, option.value, false, {
                                                                     fileName: "[project]/app/page.tsx",
-                                                                    lineNumber: 186,
+                                                                    lineNumber: 227,
                                                                     columnNumber: 23
                                                                 }, this))
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/page.tsx",
-                                                            lineNumber: 184,
+                                                            lineNumber: 225,
                                                             columnNumber: 19
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/app/page.tsx",
-                                                    lineNumber: 180,
+                                                    lineNumber: 221,
                                                     columnNumber: 17
                                                 }, this)
                                             }, void 0, false, {
                                                 fileName: "[project]/app/page.tsx",
-                                                lineNumber: 179,
+                                                lineNumber: 220,
                                                 columnNumber: 15
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/app/page.tsx",
-                                        lineNumber: 172,
+                                        lineNumber: 213,
                                         columnNumber: 13
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Card"], {
@@ -1584,19 +1776,19 @@ function TaxDashboard() {
                                                             className: "h-5 w-5 text-blue-400"
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/page.tsx",
-                                                            lineNumber: 206,
+                                                            lineNumber: 247,
                                                             columnNumber: 19
                                                         }, this),
                                                         "Kirchensteuer"
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/app/page.tsx",
-                                                    lineNumber: 205,
+                                                    lineNumber: 246,
                                                     columnNumber: 17
                                                 }, this)
                                             }, void 0, false, {
                                                 fileName: "[project]/app/page.tsx",
-                                                lineNumber: 204,
+                                                lineNumber: 245,
                                                 columnNumber: 15
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardContent"], {
@@ -1611,7 +1803,7 @@ function TaxDashboard() {
                                                                 children: "Kirchensteuerpflichtig"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/page.tsx",
-                                                                lineNumber: 212,
+                                                                lineNumber: 253,
                                                                 columnNumber: 19
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$switch$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Switch"], {
@@ -1620,13 +1812,13 @@ function TaxDashboard() {
                                                                 onCheckedChange: setKirchensteuer
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/page.tsx",
-                                                                lineNumber: 215,
+                                                                lineNumber: 256,
                                                                 columnNumber: 19
                                                             }, this)
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/app/page.tsx",
-                                                        lineNumber: 211,
+                                                        lineNumber: 252,
                                                         columnNumber: 17
                                                     }, this),
                                                     kirchensteuer && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1637,7 +1829,7 @@ function TaxDashboard() {
                                                                 children: "Kirchensteuersatz"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/page.tsx",
-                                                                lineNumber: 223,
+                                                                lineNumber: 264,
                                                                 columnNumber: 21
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1649,7 +1841,7 @@ function TaxDashboard() {
                                                                         children: "8% (BY/BW)"
                                                                     }, void 0, false, {
                                                                         fileName: "[project]/app/page.tsx",
-                                                                        lineNumber: 225,
+                                                                        lineNumber: 266,
                                                                         columnNumber: 23
                                                                     }, this),
                                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -1658,31 +1850,31 @@ function TaxDashboard() {
                                                                         children: "9% (Rest)"
                                                                     }, void 0, false, {
                                                                         fileName: "[project]/app/page.tsx",
-                                                                        lineNumber: 235,
+                                                                        lineNumber: 276,
                                                                         columnNumber: 23
                                                                     }, this)
                                                                 ]
                                                             }, void 0, true, {
                                                                 fileName: "[project]/app/page.tsx",
-                                                                lineNumber: 224,
+                                                                lineNumber: 265,
                                                                 columnNumber: 21
                                                             }, this)
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/app/page.tsx",
-                                                        lineNumber: 222,
+                                                        lineNumber: 263,
                                                         columnNumber: 19
                                                     }, this)
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/app/page.tsx",
-                                                lineNumber: 210,
+                                                lineNumber: 251,
                                                 columnNumber: 15
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/app/page.tsx",
-                                        lineNumber: 203,
+                                        lineNumber: 244,
                                         columnNumber: 13
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Card"], {
@@ -1698,14 +1890,14 @@ function TaxDashboard() {
                                                                 className: "h-5 w-5 text-blue-400"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/page.tsx",
-                                                                lineNumber: 255,
+                                                                lineNumber: 296,
                                                                 columnNumber: 19
                                                             }, this),
                                                             "KV Zusatzbeitrag"
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/app/page.tsx",
-                                                        lineNumber: 254,
+                                                        lineNumber: 295,
                                                         columnNumber: 17
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardDescription"], {
@@ -1713,13 +1905,13 @@ function TaxDashboard() {
                                                         children: "Zusätzlicher Beitragssatz Ihrer Krankenkasse"
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/page.tsx",
-                                                        lineNumber: 258,
+                                                        lineNumber: 299,
                                                         columnNumber: 17
                                                     }, this)
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/app/page.tsx",
-                                                lineNumber: 253,
+                                                lineNumber: 294,
                                                 columnNumber: 15
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardContent"], {
@@ -1736,7 +1928,7 @@ function TaxDashboard() {
                                                                 ]
                                                             }, void 0, true, {
                                                                 fileName: "[project]/app/page.tsx",
-                                                                lineNumber: 264,
+                                                                lineNumber: 305,
                                                                 columnNumber: 19
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -1744,13 +1936,13 @@ function TaxDashboard() {
                                                                 children: "Durchschnitt: 1,70%"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/page.tsx",
-                                                                lineNumber: 267,
+                                                                lineNumber: 308,
                                                                 columnNumber: 19
                                                             }, this)
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/app/page.tsx",
-                                                        lineNumber: 263,
+                                                        lineNumber: 304,
                                                         columnNumber: 17
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$slider$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Slider"], {
@@ -1763,7 +1955,7 @@ function TaxDashboard() {
                                                         step: 0.01
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/page.tsx",
-                                                        lineNumber: 269,
+                                                        lineNumber: 310,
                                                         columnNumber: 17
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1773,39 +1965,39 @@ function TaxDashboard() {
                                                                 children: "0,00%"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/page.tsx",
-                                                                lineNumber: 277,
+                                                                lineNumber: 318,
                                                                 columnNumber: 19
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                                                 children: "1,50%"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/page.tsx",
-                                                                lineNumber: 278,
+                                                                lineNumber: 319,
                                                                 columnNumber: 19
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                                                 children: "3,00%"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/page.tsx",
-                                                                lineNumber: 279,
+                                                                lineNumber: 320,
                                                                 columnNumber: 19
                                                             }, this)
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/app/page.tsx",
-                                                        lineNumber: 276,
+                                                        lineNumber: 317,
                                                         columnNumber: 17
                                                     }, this)
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/app/page.tsx",
-                                                lineNumber: 262,
+                                                lineNumber: 303,
                                                 columnNumber: 15
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/app/page.tsx",
-                                        lineNumber: 252,
+                                        lineNumber: 293,
                                         columnNumber: 13
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Card"], {
@@ -1821,14 +2013,14 @@ function TaxDashboard() {
                                                                 className: "h-5 w-5 text-blue-400"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/page.tsx",
-                                                                lineNumber: 288,
+                                                                lineNumber: 329,
                                                                 columnNumber: 19
                                                             }, this),
                                                             "Alter"
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/app/page.tsx",
-                                                        lineNumber: 287,
+                                                        lineNumber: 328,
                                                         columnNumber: 17
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardDescription"], {
@@ -1836,13 +2028,13 @@ function TaxDashboard() {
                                                         children: "Für Pflegeversicherung (Kinderlosenzuschlag ab 23)"
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/page.tsx",
-                                                        lineNumber: 291,
+                                                        lineNumber: 332,
                                                         columnNumber: 17
                                                     }, this)
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/app/page.tsx",
-                                                lineNumber: 286,
+                                                lineNumber: 327,
                                                 columnNumber: 15
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardContent"], {
@@ -1858,12 +2050,12 @@ function TaxDashboard() {
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/app/page.tsx",
-                                                            lineNumber: 297,
+                                                            lineNumber: 338,
                                                             columnNumber: 19
                                                         }, this)
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/page.tsx",
-                                                        lineNumber: 296,
+                                                        lineNumber: 337,
                                                         columnNumber: 17
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$slider$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Slider"], {
@@ -1876,7 +2068,7 @@ function TaxDashboard() {
                                                         step: 1
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/page.tsx",
-                                                        lineNumber: 301,
+                                                        lineNumber: 342,
                                                         columnNumber: 17
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1886,39 +2078,39 @@ function TaxDashboard() {
                                                                 children: "18"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/page.tsx",
-                                                                lineNumber: 309,
+                                                                lineNumber: 350,
                                                                 columnNumber: 19
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                                                 children: "40"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/page.tsx",
-                                                                lineNumber: 310,
+                                                                lineNumber: 351,
                                                                 columnNumber: 19
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                                                 children: "70"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/page.tsx",
-                                                                lineNumber: 311,
+                                                                lineNumber: 352,
                                                                 columnNumber: 19
                                                             }, this)
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/app/page.tsx",
-                                                        lineNumber: 308,
+                                                        lineNumber: 349,
                                                         columnNumber: 17
                                                     }, this)
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/app/page.tsx",
-                                                lineNumber: 295,
+                                                lineNumber: 336,
                                                 columnNumber: 15
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/app/page.tsx",
-                                        lineNumber: 285,
+                                        lineNumber: 326,
                                         columnNumber: 13
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Card"], {
@@ -1934,14 +2126,14 @@ function TaxDashboard() {
                                                                 className: "h-5 w-5 text-blue-400"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/page.tsx",
-                                                                lineNumber: 320,
+                                                                lineNumber: 361,
                                                                 columnNumber: 19
                                                             }, this),
                                                             "Anzahl Kinder"
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/app/page.tsx",
-                                                        lineNumber: 319,
+                                                        lineNumber: 360,
                                                         columnNumber: 17
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardDescription"], {
@@ -1949,13 +2141,13 @@ function TaxDashboard() {
                                                         children: "Für PV-Abschläge (ab 2. bis 5. Kind)"
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/page.tsx",
-                                                        lineNumber: 323,
+                                                        lineNumber: 364,
                                                         columnNumber: 17
                                                     }, this)
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/app/page.tsx",
-                                                lineNumber: 318,
+                                                lineNumber: 359,
                                                 columnNumber: 15
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardContent"], {
@@ -1968,12 +2160,12 @@ function TaxDashboard() {
                                                             children: kinderAnzahl
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/page.tsx",
-                                                            lineNumber: 329,
+                                                            lineNumber: 370,
                                                             columnNumber: 19
                                                         }, this)
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/page.tsx",
-                                                        lineNumber: 328,
+                                                        lineNumber: 369,
                                                         columnNumber: 17
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$slider$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Slider"], {
@@ -1986,7 +2178,7 @@ function TaxDashboard() {
                                                         step: 1
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/page.tsx",
-                                                        lineNumber: 333,
+                                                        lineNumber: 374,
                                                         columnNumber: 17
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1996,39 +2188,39 @@ function TaxDashboard() {
                                                                 children: "0"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/page.tsx",
-                                                                lineNumber: 341,
+                                                                lineNumber: 382,
                                                                 columnNumber: 19
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                                                 children: "5"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/page.tsx",
-                                                                lineNumber: 342,
+                                                                lineNumber: 383,
                                                                 columnNumber: 19
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                                                 children: "10"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/page.tsx",
-                                                                lineNumber: 343,
+                                                                lineNumber: 384,
                                                                 columnNumber: 19
                                                             }, this)
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/app/page.tsx",
-                                                        lineNumber: 340,
+                                                        lineNumber: 381,
                                                         columnNumber: 17
                                                     }, this)
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/app/page.tsx",
-                                                lineNumber: 327,
+                                                lineNumber: 368,
                                                 columnNumber: 15
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/app/page.tsx",
-                                        lineNumber: 317,
+                                        lineNumber: 358,
                                         columnNumber: 13
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Card"], {
@@ -2044,14 +2236,14 @@ function TaxDashboard() {
                                                                 className: "h-5 w-5 text-blue-400"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/page.tsx",
-                                                                lineNumber: 352,
+                                                                lineNumber: 393,
                                                                 columnNumber: 19
                                                             }, this),
                                                             "Werbungskosten"
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/app/page.tsx",
-                                                        lineNumber: 351,
+                                                        lineNumber: 392,
                                                         columnNumber: 17
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardDescription"], {
@@ -2059,13 +2251,13 @@ function TaxDashboard() {
                                                         children: "Tatsächliche Kosten über Pauschbetrag hinaus"
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/page.tsx",
-                                                        lineNumber: 355,
+                                                        lineNumber: 396,
                                                         columnNumber: 17
                                                     }, this)
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/app/page.tsx",
-                                                lineNumber: 350,
+                                                lineNumber: 391,
                                                 columnNumber: 15
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardContent"], {
@@ -2082,7 +2274,7 @@ function TaxDashboard() {
                                                                 placeholder: "0"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/page.tsx",
-                                                                lineNumber: 361,
+                                                                lineNumber: 402,
                                                                 columnNumber: 19
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -2090,13 +2282,13 @@ function TaxDashboard() {
                                                                 children: "€"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/page.tsx",
-                                                                lineNumber: 368,
+                                                                lineNumber: 409,
                                                                 columnNumber: 19
                                                             }, this)
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/app/page.tsx",
-                                                        lineNumber: 360,
+                                                        lineNumber: 401,
                                                         columnNumber: 17
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2108,7 +2300,7 @@ function TaxDashboard() {
                                                                     className: "h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/app/page.tsx",
-                                                                    lineNumber: 374,
+                                                                    lineNumber: 415,
                                                                     columnNumber: 21
                                                                 }, this),
                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -2120,406 +2312,128 @@ function TaxDashboard() {
                                                                             children: "1.230 €"
                                                                         }, void 0, false, {
                                                                             fileName: "[project]/app/page.tsx",
-                                                                            lineNumber: 376,
+                                                                            lineNumber: 417,
                                                                             columnNumber: 55
                                                                         }, this),
                                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("br", {}, void 0, false, {
                                                                             fileName: "[project]/app/page.tsx",
-                                                                            lineNumber: 377,
+                                                                            lineNumber: 418,
                                                                             columnNumber: 23
                                                                         }, this),
                                                                         "Höherer Wert (tatsächliche Kosten) wird automatisch angewendet"
                                                                     ]
                                                                 }, void 0, true, {
                                                                     fileName: "[project]/app/page.tsx",
-                                                                    lineNumber: 375,
+                                                                    lineNumber: 416,
                                                                     columnNumber: 21
                                                                 }, this)
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/app/page.tsx",
-                                                            lineNumber: 373,
+                                                            lineNumber: 414,
                                                             columnNumber: 19
                                                         }, this)
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/page.tsx",
-                                                        lineNumber: 372,
+                                                        lineNumber: 413,
                                                         columnNumber: 17
                                                     }, this)
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/app/page.tsx",
-                                                lineNumber: 359,
+                                                lineNumber: 400,
                                                 columnNumber: 15
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/app/page.tsx",
-                                        lineNumber: 349,
+                                        lineNumber: 390,
                                         columnNumber: 13
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/app/page.tsx",
-                                lineNumber: 124,
+                                lineNumber: 128,
                                 columnNumber: 11
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                 className: "lg:col-span-8 space-y-6",
                                 children: [
-                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                        className: "grid grid-cols-1 md:grid-cols-4 gap-4",
-                                        children: [
-                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Card"], {
-                                                className: "bg-gradient-to-br from-zinc-900 to-zinc-900/80 border-zinc-800",
-                                                children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardContent"], {
-                                                    className: "p-4",
-                                                    children: [
-                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                            className: "text-sm text-zinc-400 mb-1",
-                                                            children: "Brutto / Jahr"
-                                                        }, void 0, false, {
-                                                            fileName: "[project]/app/page.tsx",
-                                                            lineNumber: 392,
-                                                            columnNumber: 19
-                                                        }, this),
-                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                            className: "text-xl font-bold text-white",
-                                                            children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.bruttoJahr)
-                                                        }, void 0, false, {
-                                                            fileName: "[project]/app/page.tsx",
-                                                            lineNumber: 393,
-                                                            columnNumber: 19
-                                                        }, this),
-                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                            className: "text-xs text-zinc-500 mt-1",
-                                                            children: [
-                                                                (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.bruttoJahr / 12),
-                                                                " / Monat"
-                                                            ]
-                                                        }, void 0, true, {
-                                                            fileName: "[project]/app/page.tsx",
-                                                            lineNumber: 394,
-                                                            columnNumber: 19
-                                                        }, this)
-                                                    ]
-                                                }, void 0, true, {
-                                                    fileName: "[project]/app/page.tsx",
-                                                    lineNumber: 391,
-                                                    columnNumber: 17
-                                                }, this)
-                                            }, void 0, false, {
-                                                fileName: "[project]/app/page.tsx",
-                                                lineNumber: 390,
-                                                columnNumber: 15
-                                            }, this),
-                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Card"], {
-                                                className: "bg-gradient-to-br from-zinc-900 to-zinc-900/80 border-zinc-800",
-                                                children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardContent"], {
-                                                    className: "p-4",
-                                                    children: [
-                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                            className: "text-sm text-zinc-400 mb-1",
-                                                            children: "Steuern"
-                                                        }, void 0, false, {
-                                                            fileName: "[project]/app/page.tsx",
-                                                            lineNumber: 401,
-                                                            columnNumber: 19
-                                                        }, this),
-                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                            className: "text-xl font-bold text-red-400",
-                                                            children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.gesamtSteuern)
-                                                        }, void 0, false, {
-                                                            fileName: "[project]/app/page.tsx",
-                                                            lineNumber: 402,
-                                                            columnNumber: 19
-                                                        }, this),
-                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                            className: "text-xs text-zinc-500 mt-1",
-                                                            children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatPercent"])(taxResult.steuerSatz)
-                                                        }, void 0, false, {
-                                                            fileName: "[project]/app/page.tsx",
-                                                            lineNumber: 403,
-                                                            columnNumber: 19
-                                                        }, this)
-                                                    ]
-                                                }, void 0, true, {
-                                                    fileName: "[project]/app/page.tsx",
-                                                    lineNumber: 400,
-                                                    columnNumber: 17
-                                                }, this)
-                                            }, void 0, false, {
-                                                fileName: "[project]/app/page.tsx",
-                                                lineNumber: 399,
-                                                columnNumber: 15
-                                            }, this),
-                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Card"], {
-                                                className: "bg-gradient-to-br from-zinc-900 to-zinc-900/80 border-zinc-800",
-                                                children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardContent"], {
-                                                    className: "p-4",
-                                                    children: [
-                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                            className: "text-sm text-zinc-400 mb-1",
-                                                            children: "Sozialabgaben"
-                                                        }, void 0, false, {
-                                                            fileName: "[project]/app/page.tsx",
-                                                            lineNumber: 408,
-                                                            columnNumber: 19
-                                                        }, this),
-                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                            className: "text-xl font-bold text-orange-400",
-                                                            children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.gesamtSozialabgaben)
-                                                        }, void 0, false, {
-                                                            fileName: "[project]/app/page.tsx",
-                                                            lineNumber: 409,
-                                                            columnNumber: 19
-                                                        }, this),
-                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                            className: "text-xs text-zinc-500 mt-1",
-                                                            children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatPercent"])(taxResult.gesamtSozialabgaben / taxResult.bruttoJahr * 100)
-                                                        }, void 0, false, {
-                                                            fileName: "[project]/app/page.tsx",
-                                                            lineNumber: 412,
-                                                            columnNumber: 19
-                                                        }, this)
-                                                    ]
-                                                }, void 0, true, {
-                                                    fileName: "[project]/app/page.tsx",
-                                                    lineNumber: 407,
-                                                    columnNumber: 17
-                                                }, this)
-                                            }, void 0, false, {
-                                                fileName: "[project]/app/page.tsx",
-                                                lineNumber: 406,
-                                                columnNumber: 15
-                                            }, this),
-                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Card"], {
-                                                className: "bg-gradient-to-br from-blue-900/30 to-zinc-900 border-blue-800/50",
-                                                children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardContent"], {
-                                                    className: "p-4",
-                                                    children: [
-                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                            className: "text-sm text-blue-300 mb-1",
-                                                            children: "Netto / Jahr"
-                                                        }, void 0, false, {
-                                                            fileName: "[project]/app/page.tsx",
-                                                            lineNumber: 419,
-                                                            columnNumber: 19
-                                                        }, this),
-                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                            className: "text-xl font-bold text-blue-400",
-                                                            children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.nettoJahr)
-                                                        }, void 0, false, {
-                                                            fileName: "[project]/app/page.tsx",
-                                                            lineNumber: 420,
-                                                            columnNumber: 19
-                                                        }, this),
-                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                            className: "text-xs text-blue-300/70 mt-1",
-                                                            children: [
-                                                                (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.nettoMonat),
-                                                                " / Monat"
-                                                            ]
-                                                        }, void 0, true, {
-                                                            fileName: "[project]/app/page.tsx",
-                                                            lineNumber: 421,
-                                                            columnNumber: 19
-                                                        }, this)
-                                                    ]
-                                                }, void 0, true, {
-                                                    fileName: "[project]/app/page.tsx",
-                                                    lineNumber: 418,
-                                                    columnNumber: 17
-                                                }, this)
-                                            }, void 0, false, {
-                                                fileName: "[project]/app/page.tsx",
-                                                lineNumber: 417,
-                                                columnNumber: 15
-                                            }, this)
-                                        ]
-                                    }, void 0, true, {
-                                        fileName: "[project]/app/page.tsx",
-                                        lineNumber: 389,
-                                        columnNumber: 13
-                                    }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Card"], {
                                         className: "bg-zinc-900 border-zinc-800 shadow-xl",
                                         children: [
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardHeader"], {
-                                                children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardTitle"], {
-                                                    className: "text-lg flex items-center gap-2 text-white",
-                                                    children: [
-                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$wallet$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__Wallet$3e$__["Wallet"], {
-                                                            className: "h-5 w-5 text-blue-400"
-                                                        }, void 0, false, {
-                                                            fileName: "[project]/app/page.tsx",
-                                                            lineNumber: 432,
-                                                            columnNumber: 19
-                                                        }, this),
-                                                        "Detaillierte Aufschlüsselung"
-                                                    ]
-                                                }, void 0, true, {
-                                                    fileName: "[project]/app/page.tsx",
-                                                    lineNumber: 431,
-                                                    columnNumber: 17
-                                                }, this)
-                                            }, void 0, false, {
+                                                children: [
+                                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardTitle"], {
+                                                        className: "text-white",
+                                                        children: "Verwendete Berechnungswerte"
+                                                    }, void 0, false, {
+                                                        fileName: "[project]/app/page.tsx",
+                                                        lineNumber: 431,
+                                                        columnNumber: 17
+                                                    }, this),
+                                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardDescription"], {
+                                                        className: "text-zinc-400",
+                                                        children: [
+                                                            "Transparente Parameter des aktiven Profils (",
+                                                            activeProfile.label,
+                                                            ")."
+                                                        ]
+                                                    }, void 0, true, {
+                                                        fileName: "[project]/app/page.tsx",
+                                                        lineNumber: 432,
+                                                        columnNumber: 17
+                                                    }, this)
+                                                ]
+                                            }, void 0, true, {
                                                 fileName: "[project]/app/page.tsx",
                                                 lineNumber: 430,
                                                 columnNumber: 15
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardContent"], {
                                                 children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                    className: "space-y-4",
+                                                    className: "grid grid-cols-2 md:grid-cols-4 gap-4 text-sm",
                                                     children: [
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                            className: "p-4 bg-zinc-800/50 rounded-xl",
+                                                            className: "p-3 bg-zinc-800/50 rounded-lg",
                                                             children: [
-                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("h4", {
-                                                                    className: "text-sm font-medium text-zinc-300 mb-3 flex items-center gap-2",
-                                                                    children: [
-                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$trending$2d$up$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__TrendingUp$3e$__["TrendingUp"], {
-                                                                            className: "h-4 w-4 text-red-400"
-                                                                        }, void 0, false, {
-                                                                            fileName: "[project]/app/page.tsx",
-                                                                            lineNumber: 441,
-                                                                            columnNumber: 23
-                                                                        }, this),
-                                                                        "Steuern"
-                                                                    ]
-                                                                }, void 0, true, {
+                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                    className: "text-zinc-500",
+                                                                    children: "Grundfreibetrag"
+                                                                }, void 0, false, {
+                                                                    fileName: "[project]/app/page.tsx",
+                                                                    lineNumber: 439,
+                                                                    columnNumber: 21
+                                                                }, this),
+                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                    className: "text-white font-medium",
+                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(activeProfile.grundfreibetrag)
+                                                                }, void 0, false, {
                                                                     fileName: "[project]/app/page.tsx",
                                                                     lineNumber: 440,
                                                                     columnNumber: 21
+                                                                }, this)
+                                                            ]
+                                                        }, void 0, true, {
+                                                            fileName: "[project]/app/page.tsx",
+                                                            lineNumber: 438,
+                                                            columnNumber: 19
+                                                        }, this),
+                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                            className: "p-3 bg-zinc-800/50 rounded-lg",
+                                                            children: [
+                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                    className: "text-zinc-500",
+                                                                    children: "Zone 1 Ende"
+                                                                }, void 0, false, {
+                                                                    fileName: "[project]/app/page.tsx",
+                                                                    lineNumber: 443,
+                                                                    columnNumber: 21
                                                                 }, this),
-                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                                    className: "grid grid-cols-2 md:grid-cols-4 gap-4",
-                                                                    children: [
-                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                                            children: [
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-xs text-zinc-500 flex items-center gap-1",
-                                                                                    children: [
-                                                                                        "Lohnsteuer",
-                                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
-                                                                                            className: "group relative cursor-help",
-                                                                                            title: "Hinweis zur Berechnung",
-                                                                                            children: [
-                                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$info$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__Info$3e$__["Info"], {
-                                                                                                    className: "h-3 w-3 text-zinc-600 hover:text-blue-400 transition-colors"
-                                                                                                }, void 0, false, {
-                                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                                    lineNumber: 449,
-                                                                                                    columnNumber: 29
-                                                                                                }, this),
-                                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
-                                                                                                    className: "absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl",
-                                                                                                    children: "Die Lohnsteuer wird nach vereinfachten Regeln berechnet. Aufgrund der komplexen §39b EStG Vorsorgepauschale können geringfügige Abweichungen zu Lohnsteuertabellen auftreten."
-                                                                                                }, void 0, false, {
-                                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                                    lineNumber: 450,
-                                                                                                    columnNumber: 29
-                                                                                                }, this)
-                                                                                            ]
-                                                                                        }, void 0, true, {
-                                                                                            fileName: "[project]/app/page.tsx",
-                                                                                            lineNumber: 448,
-                                                                                            columnNumber: 27
-                                                                                        }, this)
-                                                                                    ]
-                                                                                }, void 0, true, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 446,
-                                                                                    columnNumber: 25
-                                                                                }, this),
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-lg font-semibold text-white",
-                                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.lohnsteuer)
-                                                                                }, void 0, false, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 455,
-                                                                                    columnNumber: 25
-                                                                                }, this)
-                                                                            ]
-                                                                        }, void 0, true, {
-                                                                            fileName: "[project]/app/page.tsx",
-                                                                            lineNumber: 445,
-                                                                            columnNumber: 23
-                                                                        }, this),
-                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                                            children: [
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-xs text-zinc-500",
-                                                                                    children: "Solidaritätszuschlag"
-                                                                                }, void 0, false, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 458,
-                                                                                    columnNumber: 25
-                                                                                }, this),
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-lg font-semibold text-white",
-                                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.solidaritaetszuschlag)
-                                                                                }, void 0, false, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 459,
-                                                                                    columnNumber: 25
-                                                                                }, this)
-                                                                            ]
-                                                                        }, void 0, true, {
-                                                                            fileName: "[project]/app/page.tsx",
-                                                                            lineNumber: 457,
-                                                                            columnNumber: 23
-                                                                        }, this),
-                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                                            children: [
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-xs text-zinc-500",
-                                                                                    children: "Kirchensteuer"
-                                                                                }, void 0, false, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 464,
-                                                                                    columnNumber: 25
-                                                                                }, this),
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-lg font-semibold text-white",
-                                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.kirchensteuer)
-                                                                                }, void 0, false, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 465,
-                                                                                    columnNumber: 25
-                                                                                }, this)
-                                                                            ]
-                                                                        }, void 0, true, {
-                                                                            fileName: "[project]/app/page.tsx",
-                                                                            lineNumber: 463,
-                                                                            columnNumber: 23
-                                                                        }, this),
-                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                                            children: [
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-xs text-zinc-500",
-                                                                                    children: "Gesamt"
-                                                                                }, void 0, false, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 470,
-                                                                                    columnNumber: 25
-                                                                                }, this),
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-lg font-semibold text-red-400",
-                                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.gesamtSteuern)
-                                                                                }, void 0, false, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 471,
-                                                                                    columnNumber: 25
-                                                                                }, this)
-                                                                            ]
-                                                                        }, void 0, true, {
-                                                                            fileName: "[project]/app/page.tsx",
-                                                                            lineNumber: 469,
-                                                                            columnNumber: 23
-                                                                        }, this)
-                                                                    ]
-                                                                }, void 0, true, {
+                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                    className: "text-white font-medium",
+                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(activeProfile.zone1End)
+                                                                }, void 0, false, {
                                                                     fileName: "[project]/app/page.tsx",
                                                                     lineNumber: 444,
                                                                     columnNumber: 21
@@ -2527,474 +2441,160 @@ function TaxDashboard() {
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/app/page.tsx",
-                                                            lineNumber: 439,
+                                                            lineNumber: 442,
                                                             columnNumber: 19
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                            className: "p-4 bg-zinc-800/50 rounded-xl",
+                                                            className: "p-3 bg-zinc-800/50 rounded-lg",
                                                             children: [
-                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("h4", {
-                                                                    className: "text-sm font-medium text-zinc-300 mb-3 flex items-center gap-2",
-                                                                    children: [
-                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$shield$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__Shield$3e$__["Shield"], {
-                                                                            className: "h-4 w-4 text-orange-400"
-                                                                        }, void 0, false, {
-                                                                            fileName: "[project]/app/page.tsx",
-                                                                            lineNumber: 479,
-                                                                            columnNumber: 23
-                                                                        }, this),
-                                                                        "Sozialabgaben"
-                                                                    ]
-                                                                }, void 0, true, {
+                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                    className: "text-zinc-500",
+                                                                    children: "42%-Schwelle"
+                                                                }, void 0, false, {
                                                                     fileName: "[project]/app/page.tsx",
-                                                                    lineNumber: 478,
+                                                                    lineNumber: 447,
                                                                     columnNumber: 21
                                                                 }, this),
-                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                                    className: "grid grid-cols-2 md:grid-cols-5 gap-4",
-                                                                    children: [
-                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                                            children: [
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-xs text-zinc-500",
-                                                                                    children: "Rentenversicherung"
-                                                                                }, void 0, false, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 484,
-                                                                                    columnNumber: 25
-                                                                                }, this),
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-lg font-semibold text-white",
-                                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.rentenversicherung)
-                                                                                }, void 0, false, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 485,
-                                                                                    columnNumber: 25
-                                                                                }, this),
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-xs text-zinc-600",
-                                                                                    children: "9,3%"
-                                                                                }, void 0, false, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 488,
-                                                                                    columnNumber: 25
-                                                                                }, this)
-                                                                            ]
-                                                                        }, void 0, true, {
-                                                                            fileName: "[project]/app/page.tsx",
-                                                                            lineNumber: 483,
-                                                                            columnNumber: 23
-                                                                        }, this),
-                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                                            children: [
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-xs text-zinc-500",
-                                                                                    children: "Krankenversicherung"
-                                                                                }, void 0, false, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 491,
-                                                                                    columnNumber: 25
-                                                                                }, this),
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-lg font-semibold text-white",
-                                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.krankenversicherung)
-                                                                                }, void 0, false, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 492,
-                                                                                    columnNumber: 25
-                                                                                }, this),
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-xs text-zinc-600",
-                                                                                    children: [
-                                                                                        (7.3 + zusatzbeitrag / 2).toFixed(2),
-                                                                                        "%"
-                                                                                    ]
-                                                                                }, void 0, true, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 495,
-                                                                                    columnNumber: 25
-                                                                                }, this)
-                                                                            ]
-                                                                        }, void 0, true, {
-                                                                            fileName: "[project]/app/page.tsx",
-                                                                            lineNumber: 490,
-                                                                            columnNumber: 23
-                                                                        }, this),
-                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                                            children: [
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-xs text-zinc-500",
-                                                                                    children: "Pflegeversicherung"
-                                                                                }, void 0, false, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 498,
-                                                                                    columnNumber: 25
-                                                                                }, this),
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-lg font-semibold text-white",
-                                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.pflegeversicherung)
-                                                                                }, void 0, false, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 499,
-                                                                                    columnNumber: 25
-                                                                                }, this),
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-xs text-zinc-600",
-                                                                                    children: [
-                                                                                        (Math.min(taxResult.bruttoJahr, 69750) > 0 ? taxResult.pflegeversicherung / Math.min(taxResult.bruttoJahr, 69750) * 100 : 0).toFixed(1),
-                                                                                        "%",
-                                                                                        kinderAnzahl === 0 && alter >= 23 && " (inkl. Kinderlosenzuschlag)",
-                                                                                        kinderAnzahl >= 2 && " (mit Kinderabschlägen)"
-                                                                                    ]
-                                                                                }, void 0, true, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 502,
-                                                                                    columnNumber: 25
-                                                                                }, this)
-                                                                            ]
-                                                                        }, void 0, true, {
-                                                                            fileName: "[project]/app/page.tsx",
-                                                                            lineNumber: 497,
-                                                                            columnNumber: 23
-                                                                        }, this),
-                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                                            children: [
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-xs text-zinc-500",
-                                                                                    children: "Arbeitslosenvers."
-                                                                                }, void 0, false, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 513,
-                                                                                    columnNumber: 25
-                                                                                }, this),
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-lg font-semibold text-white",
-                                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.arbeitslosenversicherung)
-                                                                                }, void 0, false, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 514,
-                                                                                    columnNumber: 25
-                                                                                }, this),
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-xs text-zinc-600",
-                                                                                    children: "1,3%"
-                                                                                }, void 0, false, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 517,
-                                                                                    columnNumber: 25
-                                                                                }, this)
-                                                                            ]
-                                                                        }, void 0, true, {
-                                                                            fileName: "[project]/app/page.tsx",
-                                                                            lineNumber: 512,
-                                                                            columnNumber: 23
-                                                                        }, this),
-                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                                            children: [
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-xs text-zinc-500",
-                                                                                    children: "Gesamt"
-                                                                                }, void 0, false, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 520,
-                                                                                    columnNumber: 25
-                                                                                }, this),
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-lg font-semibold text-orange-400",
-                                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.gesamtSozialabgaben)
-                                                                                }, void 0, false, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 521,
-                                                                                    columnNumber: 25
-                                                                                }, this)
-                                                                            ]
-                                                                        }, void 0, true, {
-                                                                            fileName: "[project]/app/page.tsx",
-                                                                            lineNumber: 519,
-                                                                            columnNumber: 23
-                                                                        }, this)
-                                                                    ]
-                                                                }, void 0, true, {
+                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                    className: "text-white font-medium",
+                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(activeProfile.zone2End + 1)
+                                                                }, void 0, false, {
                                                                     fileName: "[project]/app/page.tsx",
-                                                                    lineNumber: 482,
+                                                                    lineNumber: 448,
                                                                     columnNumber: 21
                                                                 }, this)
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/app/page.tsx",
-                                                            lineNumber: 477,
+                                                            lineNumber: 446,
                                                             columnNumber: 19
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                            className: "p-4 bg-zinc-800/50 rounded-xl",
+                                                            className: "p-3 bg-zinc-800/50 rounded-lg",
                                                             children: [
-                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("h4", {
-                                                                    className: "text-sm font-medium text-zinc-300 mb-3 flex items-center gap-2",
-                                                                    children: [
-                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$percent$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__Percent$3e$__["Percent"], {
-                                                                            className: "h-4 w-4 text-blue-400"
-                                                                        }, void 0, false, {
-                                                                            fileName: "[project]/app/page.tsx",
-                                                                            lineNumber: 531,
-                                                                            columnNumber: 23
-                                                                        }, this),
-                                                                        "Zu versteuerndes Einkommen"
-                                                                    ]
-                                                                }, void 0, true, {
+                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                    className: "text-zinc-500",
+                                                                    children: "45%-Schwelle"
+                                                                }, void 0, false, {
                                                                     fileName: "[project]/app/page.tsx",
-                                                                    lineNumber: 530,
+                                                                    lineNumber: 451,
                                                                     columnNumber: 21
                                                                 }, this),
-                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                                    className: "grid grid-cols-2 md:grid-cols-5 gap-4",
-                                                                    children: [
-                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                                            children: [
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-xs text-zinc-500",
-                                                                                    children: "Bruttoeinkommen"
-                                                                                }, void 0, false, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 536,
-                                                                                    columnNumber: 25
-                                                                                }, this),
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-lg font-semibold text-white",
-                                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.bruttoJahr)
-                                                                                }, void 0, false, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 537,
-                                                                                    columnNumber: 25
-                                                                                }, this)
-                                                                            ]
-                                                                        }, void 0, true, {
-                                                                            fileName: "[project]/app/page.tsx",
-                                                                            lineNumber: 535,
-                                                                            columnNumber: 23
-                                                                        }, this),
-                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                                            children: [
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-xs text-zinc-500",
-                                                                                    children: "Werbungskosten"
-                                                                                }, void 0, false, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 540,
-                                                                                    columnNumber: 25
-                                                                                }, this),
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-lg font-semibold text-red-300",
-                                                                                    children: [
-                                                                                        "-",
-                                                                                        (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.werbungskostenPauschbetrag)
-                                                                                    ]
-                                                                                }, void 0, true, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 541,
-                                                                                    columnNumber: 25
-                                                                                }, this)
-                                                                            ]
-                                                                        }, void 0, true, {
-                                                                            fileName: "[project]/app/page.tsx",
-                                                                            lineNumber: 539,
-                                                                            columnNumber: 23
-                                                                        }, this),
-                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                                            children: [
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-xs text-zinc-500",
-                                                                                    children: "Sonderausgaben"
-                                                                                }, void 0, false, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 546,
-                                                                                    columnNumber: 25
-                                                                                }, this),
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-lg font-semibold text-red-300",
-                                                                                    children: [
-                                                                                        "-",
-                                                                                        (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.sonderausgabenPauschbetrag)
-                                                                                    ]
-                                                                                }, void 0, true, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 547,
-                                                                                    columnNumber: 25
-                                                                                }, this)
-                                                                            ]
-                                                                        }, void 0, true, {
-                                                                            fileName: "[project]/app/page.tsx",
-                                                                            lineNumber: 545,
-                                                                            columnNumber: 23
-                                                                        }, this),
-                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                                            children: [
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-xs text-zinc-500",
-                                                                                    children: "Vorsorgepauschale"
-                                                                                }, void 0, false, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 552,
-                                                                                    columnNumber: 25
-                                                                                }, this),
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-lg font-semibold text-red-300",
-                                                                                    children: [
-                                                                                        "-",
-                                                                                        (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.vorsorgepauschale)
-                                                                                    ]
-                                                                                }, void 0, true, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 553,
-                                                                                    columnNumber: 25
-                                                                                }, this)
-                                                                            ]
-                                                                        }, void 0, true, {
-                                                                            fileName: "[project]/app/page.tsx",
-                                                                            lineNumber: 551,
-                                                                            columnNumber: 23
-                                                                        }, this),
-                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                                            children: [
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-xs text-zinc-500",
-                                                                                    children: "ZvE nach §39b (36€-Rundung)"
-                                                                                }, void 0, false, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 558,
-                                                                                    columnNumber: 25
-                                                                                }, this),
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-lg font-semibold text-blue-400",
-                                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.zvEForLohnsteuer)
-                                                                                }, void 0, false, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 559,
-                                                                                    columnNumber: 25
-                                                                                }, this),
-                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                    className: "text-xs text-zinc-600",
-                                                                                    children: taxResult.zuVersteuerndesEinkommen !== taxResult.zvEForLohnsteuer && `abgerundet von ${(0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.zuVersteuerndesEinkommen)}`
-                                                                                }, void 0, false, {
-                                                                                    fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 562,
-                                                                                    columnNumber: 25
-                                                                                }, this)
-                                                                            ]
-                                                                        }, void 0, true, {
-                                                                            fileName: "[project]/app/page.tsx",
-                                                                            lineNumber: 557,
-                                                                            columnNumber: 23
-                                                                        }, this)
-                                                                    ]
-                                                                }, void 0, true, {
+                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                    className: "text-white font-medium",
+                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(activeProfile.zone3End + 1)
+                                                                }, void 0, false, {
                                                                     fileName: "[project]/app/page.tsx",
-                                                                    lineNumber: 534,
+                                                                    lineNumber: 452,
                                                                     columnNumber: 21
                                                                 }, this)
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/app/page.tsx",
-                                                            lineNumber: 529,
+                                                            lineNumber: 450,
                                                             columnNumber: 19
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                            className: "p-4 bg-gradient-to-r from-blue-900/20 to-zinc-900 border border-blue-800/30 rounded-xl",
-                                                            children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                                className: "flex flex-wrap items-center justify-between gap-4",
-                                                                children: [
-                                                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                                        children: [
-                                                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                className: "text-sm text-zinc-400",
-                                                                                children: "Nettoquote"
-                                                                            }, void 0, false, {
-                                                                                fileName: "[project]/app/page.tsx",
-                                                                                lineNumber: 574,
-                                                                                columnNumber: 25
-                                                                            }, this),
-                                                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                className: "text-2xl font-bold text-blue-400",
-                                                                                children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatPercent"])(taxResult.nettoQuote)
-                                                                            }, void 0, false, {
-                                                                                fileName: "[project]/app/page.tsx",
-                                                                                lineNumber: 575,
-                                                                                columnNumber: 25
-                                                                            }, this)
-                                                                        ]
-                                                                    }, void 0, true, {
-                                                                        fileName: "[project]/app/page.tsx",
-                                                                        lineNumber: 573,
-                                                                        columnNumber: 23
-                                                                    }, this),
-                                                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                                        children: [
-                                                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                className: "text-sm text-zinc-400",
-                                                                                children: "Gesamtbelastung"
-                                                                            }, void 0, false, {
-                                                                                fileName: "[project]/app/page.tsx",
-                                                                                lineNumber: 578,
-                                                                                columnNumber: 25
-                                                                            }, this),
-                                                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                className: "text-2xl font-bold text-red-400",
-                                                                                children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatPercent"])(taxResult.abgabenSatz)
-                                                                            }, void 0, false, {
-                                                                                fileName: "[project]/app/page.tsx",
-                                                                                lineNumber: 579,
-                                                                                columnNumber: 25
-                                                                            }, this)
-                                                                        ]
-                                                                    }, void 0, true, {
-                                                                        fileName: "[project]/app/page.tsx",
-                                                                        lineNumber: 577,
-                                                                        columnNumber: 23
-                                                                    }, this),
-                                                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                                        className: "text-right",
-                                                                        children: [
-                                                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                className: "text-sm text-zinc-400",
-                                                                                children: "Netto jährlich / monatlich"
-                                                                            }, void 0, false, {
-                                                                                fileName: "[project]/app/page.tsx",
-                                                                                lineNumber: 582,
-                                                                                columnNumber: 25
-                                                                            }, this),
-                                                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                className: "text-2xl font-bold text-green-400",
-                                                                                children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.nettoJahr)
-                                                                            }, void 0, false, {
-                                                                                fileName: "[project]/app/page.tsx",
-                                                                                lineNumber: 583,
-                                                                                columnNumber: 25
-                                                                            }, this),
-                                                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                                                                className: "text-lg text-green-400/80",
-                                                                                children: [
-                                                                                    (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.nettoMonat),
-                                                                                    " / Monat"
-                                                                                ]
-                                                                            }, void 0, true, {
-                                                                                fileName: "[project]/app/page.tsx",
-                                                                                lineNumber: 584,
-                                                                                columnNumber: 25
-                                                                            }, this)
-                                                                        ]
-                                                                    }, void 0, true, {
-                                                                        fileName: "[project]/app/page.tsx",
-                                                                        lineNumber: 581,
-                                                                        columnNumber: 23
-                                                                    }, this)
-                                                                ]
-                                                            }, void 0, true, {
-                                                                fileName: "[project]/app/page.tsx",
-                                                                lineNumber: 572,
-                                                                columnNumber: 21
-                                                            }, this)
-                                                        }, void 0, false, {
+                                                            className: "p-3 bg-zinc-800/50 rounded-lg",
+                                                            children: [
+                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                    className: "text-zinc-500",
+                                                                    children: "RV/AV BBG"
+                                                                }, void 0, false, {
+                                                                    fileName: "[project]/app/page.tsx",
+                                                                    lineNumber: 455,
+                                                                    columnNumber: 21
+                                                                }, this),
+                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                    className: "text-white font-medium",
+                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(activeProfile.rvBeitragsbemessungsgrenze)
+                                                                }, void 0, false, {
+                                                                    fileName: "[project]/app/page.tsx",
+                                                                    lineNumber: 456,
+                                                                    columnNumber: 21
+                                                                }, this)
+                                                            ]
+                                                        }, void 0, true, {
                                                             fileName: "[project]/app/page.tsx",
-                                                            lineNumber: 571,
+                                                            lineNumber: 454,
+                                                            columnNumber: 19
+                                                        }, this),
+                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                            className: "p-3 bg-zinc-800/50 rounded-lg",
+                                                            children: [
+                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                    className: "text-zinc-500",
+                                                                    children: "KV/PV BBG"
+                                                                }, void 0, false, {
+                                                                    fileName: "[project]/app/page.tsx",
+                                                                    lineNumber: 459,
+                                                                    columnNumber: 21
+                                                                }, this),
+                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                    className: "text-white font-medium",
+                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(activeProfile.kvBeitragsbemessungsgrenze)
+                                                                }, void 0, false, {
+                                                                    fileName: "[project]/app/page.tsx",
+                                                                    lineNumber: 460,
+                                                                    columnNumber: 21
+                                                                }, this)
+                                                            ]
+                                                        }, void 0, true, {
+                                                            fileName: "[project]/app/page.tsx",
+                                                            lineNumber: 458,
+                                                            columnNumber: 19
+                                                        }, this),
+                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                            className: "p-3 bg-zinc-800/50 rounded-lg",
+                                                            children: [
+                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                    className: "text-zinc-500",
+                                                                    children: "Soli-Freigrenze"
+                                                                }, void 0, false, {
+                                                                    fileName: "[project]/app/page.tsx",
+                                                                    lineNumber: 463,
+                                                                    columnNumber: 21
+                                                                }, this),
+                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                    className: "text-white font-medium",
+                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(activeProfile.soliFreigrenze)
+                                                                }, void 0, false, {
+                                                                    fileName: "[project]/app/page.tsx",
+                                                                    lineNumber: 464,
+                                                                    columnNumber: 21
+                                                                }, this)
+                                                            ]
+                                                        }, void 0, true, {
+                                                            fileName: "[project]/app/page.tsx",
+                                                            lineNumber: 462,
+                                                            columnNumber: 19
+                                                        }, this),
+                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                            className: "p-3 bg-zinc-800/50 rounded-lg",
+                                                            children: [
+                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                    className: "text-zinc-500",
+                                                                    children: "36€-Rundung"
+                                                                }, void 0, false, {
+                                                                    fileName: "[project]/app/page.tsx",
+                                                                    lineNumber: 467,
+                                                                    columnNumber: 21
+                                                                }, this),
+                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                    className: "text-white font-medium",
+                                                                    children: [
+                                                                        activeProfile.vorsorgepauschaleRundung,
+                                                                        " €"
+                                                                    ]
+                                                                }, void 0, true, {
+                                                                    fileName: "[project]/app/page.tsx",
+                                                                    lineNumber: 468,
+                                                                    columnNumber: 21
+                                                                }, this)
+                                                            ]
+                                                        }, void 0, true, {
+                                                            fileName: "[project]/app/page.tsx",
+                                                            lineNumber: 466,
                                                             columnNumber: 19
                                                         }, this)
                                                     ]
@@ -3014,6 +2614,853 @@ function TaxDashboard() {
                                         lineNumber: 429,
                                         columnNumber: 13
                                     }, this),
+                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                        className: "grid grid-cols-1 md:grid-cols-4 gap-4",
+                                        children: [
+                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Card"], {
+                                                className: "bg-gradient-to-br from-zinc-900 to-zinc-900/80 border-zinc-800",
+                                                children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardContent"], {
+                                                    className: "p-4",
+                                                    children: [
+                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                            className: "text-sm text-zinc-400 mb-1",
+                                                            children: "Brutto / Jahr"
+                                                        }, void 0, false, {
+                                                            fileName: "[project]/app/page.tsx",
+                                                            lineNumber: 478,
+                                                            columnNumber: 19
+                                                        }, this),
+                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                            className: "text-xl font-bold text-white",
+                                                            children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.bruttoJahr)
+                                                        }, void 0, false, {
+                                                            fileName: "[project]/app/page.tsx",
+                                                            lineNumber: 479,
+                                                            columnNumber: 19
+                                                        }, this),
+                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                            className: "text-xs text-zinc-500 mt-1",
+                                                            children: [
+                                                                (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.bruttoJahr / 12),
+                                                                " / Monat"
+                                                            ]
+                                                        }, void 0, true, {
+                                                            fileName: "[project]/app/page.tsx",
+                                                            lineNumber: 480,
+                                                            columnNumber: 19
+                                                        }, this)
+                                                    ]
+                                                }, void 0, true, {
+                                                    fileName: "[project]/app/page.tsx",
+                                                    lineNumber: 477,
+                                                    columnNumber: 17
+                                                }, this)
+                                            }, void 0, false, {
+                                                fileName: "[project]/app/page.tsx",
+                                                lineNumber: 476,
+                                                columnNumber: 15
+                                            }, this),
+                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Card"], {
+                                                className: "bg-gradient-to-br from-zinc-900 to-zinc-900/80 border-zinc-800",
+                                                children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardContent"], {
+                                                    className: "p-4",
+                                                    children: [
+                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                            className: "text-sm text-zinc-400 mb-1",
+                                                            children: "Steuern"
+                                                        }, void 0, false, {
+                                                            fileName: "[project]/app/page.tsx",
+                                                            lineNumber: 487,
+                                                            columnNumber: 19
+                                                        }, this),
+                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                            className: "text-xl font-bold text-red-400",
+                                                            children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.gesamtSteuern)
+                                                        }, void 0, false, {
+                                                            fileName: "[project]/app/page.tsx",
+                                                            lineNumber: 488,
+                                                            columnNumber: 19
+                                                        }, this),
+                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                            className: "text-xs text-zinc-500 mt-1",
+                                                            children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatPercent"])(taxResult.steuerSatz)
+                                                        }, void 0, false, {
+                                                            fileName: "[project]/app/page.tsx",
+                                                            lineNumber: 489,
+                                                            columnNumber: 19
+                                                        }, this)
+                                                    ]
+                                                }, void 0, true, {
+                                                    fileName: "[project]/app/page.tsx",
+                                                    lineNumber: 486,
+                                                    columnNumber: 17
+                                                }, this)
+                                            }, void 0, false, {
+                                                fileName: "[project]/app/page.tsx",
+                                                lineNumber: 485,
+                                                columnNumber: 15
+                                            }, this),
+                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Card"], {
+                                                className: "bg-gradient-to-br from-zinc-900 to-zinc-900/80 border-zinc-800",
+                                                children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardContent"], {
+                                                    className: "p-4",
+                                                    children: [
+                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                            className: "text-sm text-zinc-400 mb-1",
+                                                            children: "Sozialabgaben"
+                                                        }, void 0, false, {
+                                                            fileName: "[project]/app/page.tsx",
+                                                            lineNumber: 494,
+                                                            columnNumber: 19
+                                                        }, this),
+                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                            className: "text-xl font-bold text-orange-400",
+                                                            children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.gesamtSozialabgaben)
+                                                        }, void 0, false, {
+                                                            fileName: "[project]/app/page.tsx",
+                                                            lineNumber: 495,
+                                                            columnNumber: 19
+                                                        }, this),
+                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                            className: "text-xs text-zinc-500 mt-1",
+                                                            children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatPercent"])(taxResult.gesamtSozialabgaben / taxResult.bruttoJahr * 100)
+                                                        }, void 0, false, {
+                                                            fileName: "[project]/app/page.tsx",
+                                                            lineNumber: 498,
+                                                            columnNumber: 19
+                                                        }, this)
+                                                    ]
+                                                }, void 0, true, {
+                                                    fileName: "[project]/app/page.tsx",
+                                                    lineNumber: 493,
+                                                    columnNumber: 17
+                                                }, this)
+                                            }, void 0, false, {
+                                                fileName: "[project]/app/page.tsx",
+                                                lineNumber: 492,
+                                                columnNumber: 15
+                                            }, this),
+                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Card"], {
+                                                className: "bg-gradient-to-br from-blue-900/30 to-zinc-900 border-blue-800/50",
+                                                children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardContent"], {
+                                                    className: "p-4",
+                                                    children: [
+                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                            className: "text-sm text-blue-300 mb-1",
+                                                            children: "Netto / Jahr"
+                                                        }, void 0, false, {
+                                                            fileName: "[project]/app/page.tsx",
+                                                            lineNumber: 505,
+                                                            columnNumber: 19
+                                                        }, this),
+                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                            className: "text-xl font-bold text-blue-400",
+                                                            children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.nettoJahr)
+                                                        }, void 0, false, {
+                                                            fileName: "[project]/app/page.tsx",
+                                                            lineNumber: 506,
+                                                            columnNumber: 19
+                                                        }, this),
+                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                            className: "text-xs text-blue-300/70 mt-1",
+                                                            children: [
+                                                                (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.nettoMonat),
+                                                                " / Monat"
+                                                            ]
+                                                        }, void 0, true, {
+                                                            fileName: "[project]/app/page.tsx",
+                                                            lineNumber: 507,
+                                                            columnNumber: 19
+                                                        }, this)
+                                                    ]
+                                                }, void 0, true, {
+                                                    fileName: "[project]/app/page.tsx",
+                                                    lineNumber: 504,
+                                                    columnNumber: 17
+                                                }, this)
+                                            }, void 0, false, {
+                                                fileName: "[project]/app/page.tsx",
+                                                lineNumber: 503,
+                                                columnNumber: 15
+                                            }, this)
+                                        ]
+                                    }, void 0, true, {
+                                        fileName: "[project]/app/page.tsx",
+                                        lineNumber: 475,
+                                        columnNumber: 13
+                                    }, this),
+                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Card"], {
+                                        className: "bg-zinc-900 border-zinc-800 shadow-xl",
+                                        children: [
+                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardHeader"], {
+                                                children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardTitle"], {
+                                                    className: "text-lg flex items-center gap-2 text-white",
+                                                    children: [
+                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$wallet$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__Wallet$3e$__["Wallet"], {
+                                                            className: "h-5 w-5 text-blue-400"
+                                                        }, void 0, false, {
+                                                            fileName: "[project]/app/page.tsx",
+                                                            lineNumber: 518,
+                                                            columnNumber: 19
+                                                        }, this),
+                                                        "Detaillierte Aufschlüsselung"
+                                                    ]
+                                                }, void 0, true, {
+                                                    fileName: "[project]/app/page.tsx",
+                                                    lineNumber: 517,
+                                                    columnNumber: 17
+                                                }, this)
+                                            }, void 0, false, {
+                                                fileName: "[project]/app/page.tsx",
+                                                lineNumber: 516,
+                                                columnNumber: 15
+                                            }, this),
+                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardContent"], {
+                                                children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                    className: "space-y-4",
+                                                    children: [
+                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                            className: "p-4 bg-zinc-800/50 rounded-xl",
+                                                            children: [
+                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("h4", {
+                                                                    className: "text-sm font-medium text-zinc-300 mb-3 flex items-center gap-2",
+                                                                    children: [
+                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$trending$2d$up$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__TrendingUp$3e$__["TrendingUp"], {
+                                                                            className: "h-4 w-4 text-red-400"
+                                                                        }, void 0, false, {
+                                                                            fileName: "[project]/app/page.tsx",
+                                                                            lineNumber: 527,
+                                                                            columnNumber: 23
+                                                                        }, this),
+                                                                        "Steuern"
+                                                                    ]
+                                                                }, void 0, true, {
+                                                                    fileName: "[project]/app/page.tsx",
+                                                                    lineNumber: 526,
+                                                                    columnNumber: 21
+                                                                }, this),
+                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                                    className: "grid grid-cols-2 md:grid-cols-4 gap-4",
+                                                                    children: [
+                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                                            children: [
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-xs text-zinc-500 flex items-center gap-1",
+                                                                                    children: [
+                                                                                        "Lohnsteuer",
+                                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
+                                                                                            className: "group relative cursor-help",
+                                                                                            title: "Hinweis zur Berechnung",
+                                                                                            children: [
+                                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$info$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__Info$3e$__["Info"], {
+                                                                                                    className: "h-3 w-3 text-zinc-600 hover:text-blue-400 transition-colors"
+                                                                                                }, void 0, false, {
+                                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                                    lineNumber: 535,
+                                                                                                    columnNumber: 29
+                                                                                                }, this),
+                                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
+                                                                                                    className: "absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl",
+                                                                                                    children: "Die Lohnsteuer wird nach vereinfachten Regeln berechnet. Aufgrund der komplexen §39b EStG Vorsorgepauschale können geringfügige Abweichungen zu Lohnsteuertabellen auftreten."
+                                                                                                }, void 0, false, {
+                                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                                    lineNumber: 536,
+                                                                                                    columnNumber: 29
+                                                                                                }, this)
+                                                                                            ]
+                                                                                        }, void 0, true, {
+                                                                                            fileName: "[project]/app/page.tsx",
+                                                                                            lineNumber: 534,
+                                                                                            columnNumber: 27
+                                                                                        }, this)
+                                                                                    ]
+                                                                                }, void 0, true, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 532,
+                                                                                    columnNumber: 25
+                                                                                }, this),
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-lg font-semibold text-white",
+                                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.lohnsteuer)
+                                                                                }, void 0, false, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 541,
+                                                                                    columnNumber: 25
+                                                                                }, this)
+                                                                            ]
+                                                                        }, void 0, true, {
+                                                                            fileName: "[project]/app/page.tsx",
+                                                                            lineNumber: 531,
+                                                                            columnNumber: 23
+                                                                        }, this),
+                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                                            children: [
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-xs text-zinc-500",
+                                                                                    children: "Solidaritätszuschlag"
+                                                                                }, void 0, false, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 544,
+                                                                                    columnNumber: 25
+                                                                                }, this),
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-lg font-semibold text-white",
+                                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.solidaritaetszuschlag)
+                                                                                }, void 0, false, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 545,
+                                                                                    columnNumber: 25
+                                                                                }, this)
+                                                                            ]
+                                                                        }, void 0, true, {
+                                                                            fileName: "[project]/app/page.tsx",
+                                                                            lineNumber: 543,
+                                                                            columnNumber: 23
+                                                                        }, this),
+                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                                            children: [
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-xs text-zinc-500",
+                                                                                    children: "Kirchensteuer"
+                                                                                }, void 0, false, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 550,
+                                                                                    columnNumber: 25
+                                                                                }, this),
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-lg font-semibold text-white",
+                                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.kirchensteuer)
+                                                                                }, void 0, false, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 551,
+                                                                                    columnNumber: 25
+                                                                                }, this)
+                                                                            ]
+                                                                        }, void 0, true, {
+                                                                            fileName: "[project]/app/page.tsx",
+                                                                            lineNumber: 549,
+                                                                            columnNumber: 23
+                                                                        }, this),
+                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                                            children: [
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-xs text-zinc-500",
+                                                                                    children: "Gesamt"
+                                                                                }, void 0, false, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 556,
+                                                                                    columnNumber: 25
+                                                                                }, this),
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-lg font-semibold text-red-400",
+                                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.gesamtSteuern)
+                                                                                }, void 0, false, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 557,
+                                                                                    columnNumber: 25
+                                                                                }, this)
+                                                                            ]
+                                                                        }, void 0, true, {
+                                                                            fileName: "[project]/app/page.tsx",
+                                                                            lineNumber: 555,
+                                                                            columnNumber: 23
+                                                                        }, this)
+                                                                    ]
+                                                                }, void 0, true, {
+                                                                    fileName: "[project]/app/page.tsx",
+                                                                    lineNumber: 530,
+                                                                    columnNumber: 21
+                                                                }, this)
+                                                            ]
+                                                        }, void 0, true, {
+                                                            fileName: "[project]/app/page.tsx",
+                                                            lineNumber: 525,
+                                                            columnNumber: 19
+                                                        }, this),
+                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                            className: "p-4 bg-zinc-800/50 rounded-xl",
+                                                            children: [
+                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("h4", {
+                                                                    className: "text-sm font-medium text-zinc-300 mb-3 flex items-center gap-2",
+                                                                    children: [
+                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$shield$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__Shield$3e$__["Shield"], {
+                                                                            className: "h-4 w-4 text-orange-400"
+                                                                        }, void 0, false, {
+                                                                            fileName: "[project]/app/page.tsx",
+                                                                            lineNumber: 565,
+                                                                            columnNumber: 23
+                                                                        }, this),
+                                                                        "Sozialabgaben"
+                                                                    ]
+                                                                }, void 0, true, {
+                                                                    fileName: "[project]/app/page.tsx",
+                                                                    lineNumber: 564,
+                                                                    columnNumber: 21
+                                                                }, this),
+                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                                    className: "grid grid-cols-2 md:grid-cols-5 gap-4",
+                                                                    children: [
+                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                                            children: [
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-xs text-zinc-500",
+                                                                                    children: "Rentenversicherung"
+                                                                                }, void 0, false, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 570,
+                                                                                    columnNumber: 25
+                                                                                }, this),
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-lg font-semibold text-white",
+                                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.rentenversicherung)
+                                                                                }, void 0, false, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 571,
+                                                                                    columnNumber: 25
+                                                                                }, this),
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-xs text-zinc-600",
+                                                                                    children: "9,3%"
+                                                                                }, void 0, false, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 574,
+                                                                                    columnNumber: 25
+                                                                                }, this)
+                                                                            ]
+                                                                        }, void 0, true, {
+                                                                            fileName: "[project]/app/page.tsx",
+                                                                            lineNumber: 569,
+                                                                            columnNumber: 23
+                                                                        }, this),
+                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                                            children: [
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-xs text-zinc-500",
+                                                                                    children: "Krankenversicherung"
+                                                                                }, void 0, false, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 577,
+                                                                                    columnNumber: 25
+                                                                                }, this),
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-lg font-semibold text-white",
+                                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.krankenversicherung)
+                                                                                }, void 0, false, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 578,
+                                                                                    columnNumber: 25
+                                                                                }, this),
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-xs text-zinc-600",
+                                                                                    children: [
+                                                                                        (7.3 + zusatzbeitrag / 2).toFixed(2),
+                                                                                        "%"
+                                                                                    ]
+                                                                                }, void 0, true, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 581,
+                                                                                    columnNumber: 25
+                                                                                }, this)
+                                                                            ]
+                                                                        }, void 0, true, {
+                                                                            fileName: "[project]/app/page.tsx",
+                                                                            lineNumber: 576,
+                                                                            columnNumber: 23
+                                                                        }, this),
+                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                                            children: [
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-xs text-zinc-500",
+                                                                                    children: "Pflegeversicherung"
+                                                                                }, void 0, false, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 584,
+                                                                                    columnNumber: 25
+                                                                                }, this),
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-lg font-semibold text-white",
+                                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.pflegeversicherung)
+                                                                                }, void 0, false, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 585,
+                                                                                    columnNumber: 25
+                                                                                }, this),
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-xs text-zinc-600",
+                                                                                    children: [
+                                                                                        (Math.min(taxResult.bruttoJahr, 69750) > 0 ? taxResult.pflegeversicherung / Math.min(taxResult.bruttoJahr, 69750) * 100 : 0).toFixed(1),
+                                                                                        "%",
+                                                                                        kinderAnzahl === 0 && alter >= 23 && " (inkl. Kinderlosenzuschlag)",
+                                                                                        kinderAnzahl >= 2 && " (mit Kinderabschlägen)"
+                                                                                    ]
+                                                                                }, void 0, true, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 588,
+                                                                                    columnNumber: 25
+                                                                                }, this)
+                                                                            ]
+                                                                        }, void 0, true, {
+                                                                            fileName: "[project]/app/page.tsx",
+                                                                            lineNumber: 583,
+                                                                            columnNumber: 23
+                                                                        }, this),
+                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                                            children: [
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-xs text-zinc-500",
+                                                                                    children: "Arbeitslosenvers."
+                                                                                }, void 0, false, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 599,
+                                                                                    columnNumber: 25
+                                                                                }, this),
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-lg font-semibold text-white",
+                                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.arbeitslosenversicherung)
+                                                                                }, void 0, false, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 600,
+                                                                                    columnNumber: 25
+                                                                                }, this),
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-xs text-zinc-600",
+                                                                                    children: "1,3%"
+                                                                                }, void 0, false, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 603,
+                                                                                    columnNumber: 25
+                                                                                }, this)
+                                                                            ]
+                                                                        }, void 0, true, {
+                                                                            fileName: "[project]/app/page.tsx",
+                                                                            lineNumber: 598,
+                                                                            columnNumber: 23
+                                                                        }, this),
+                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                                            children: [
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-xs text-zinc-500",
+                                                                                    children: "Gesamt"
+                                                                                }, void 0, false, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 606,
+                                                                                    columnNumber: 25
+                                                                                }, this),
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-lg font-semibold text-orange-400",
+                                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.gesamtSozialabgaben)
+                                                                                }, void 0, false, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 607,
+                                                                                    columnNumber: 25
+                                                                                }, this)
+                                                                            ]
+                                                                        }, void 0, true, {
+                                                                            fileName: "[project]/app/page.tsx",
+                                                                            lineNumber: 605,
+                                                                            columnNumber: 23
+                                                                        }, this)
+                                                                    ]
+                                                                }, void 0, true, {
+                                                                    fileName: "[project]/app/page.tsx",
+                                                                    lineNumber: 568,
+                                                                    columnNumber: 21
+                                                                }, this)
+                                                            ]
+                                                        }, void 0, true, {
+                                                            fileName: "[project]/app/page.tsx",
+                                                            lineNumber: 563,
+                                                            columnNumber: 19
+                                                        }, this),
+                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                            className: "p-4 bg-zinc-800/50 rounded-xl",
+                                                            children: [
+                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("h4", {
+                                                                    className: "text-sm font-medium text-zinc-300 mb-3 flex items-center gap-2",
+                                                                    children: [
+                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$percent$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__Percent$3e$__["Percent"], {
+                                                                            className: "h-4 w-4 text-blue-400"
+                                                                        }, void 0, false, {
+                                                                            fileName: "[project]/app/page.tsx",
+                                                                            lineNumber: 617,
+                                                                            columnNumber: 23
+                                                                        }, this),
+                                                                        "Zu versteuerndes Einkommen"
+                                                                    ]
+                                                                }, void 0, true, {
+                                                                    fileName: "[project]/app/page.tsx",
+                                                                    lineNumber: 616,
+                                                                    columnNumber: 21
+                                                                }, this),
+                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                                    className: "grid grid-cols-2 md:grid-cols-5 gap-4",
+                                                                    children: [
+                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                                            children: [
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-xs text-zinc-500",
+                                                                                    children: "Bruttoeinkommen"
+                                                                                }, void 0, false, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 622,
+                                                                                    columnNumber: 25
+                                                                                }, this),
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-lg font-semibold text-white",
+                                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.bruttoJahr)
+                                                                                }, void 0, false, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 623,
+                                                                                    columnNumber: 25
+                                                                                }, this)
+                                                                            ]
+                                                                        }, void 0, true, {
+                                                                            fileName: "[project]/app/page.tsx",
+                                                                            lineNumber: 621,
+                                                                            columnNumber: 23
+                                                                        }, this),
+                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                                            children: [
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-xs text-zinc-500",
+                                                                                    children: "Werbungskosten"
+                                                                                }, void 0, false, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 626,
+                                                                                    columnNumber: 25
+                                                                                }, this),
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-lg font-semibold text-red-300",
+                                                                                    children: [
+                                                                                        "-",
+                                                                                        (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.werbungskostenPauschbetrag)
+                                                                                    ]
+                                                                                }, void 0, true, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 627,
+                                                                                    columnNumber: 25
+                                                                                }, this)
+                                                                            ]
+                                                                        }, void 0, true, {
+                                                                            fileName: "[project]/app/page.tsx",
+                                                                            lineNumber: 625,
+                                                                            columnNumber: 23
+                                                                        }, this),
+                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                                            children: [
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-xs text-zinc-500",
+                                                                                    children: "Sonderausgaben"
+                                                                                }, void 0, false, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 632,
+                                                                                    columnNumber: 25
+                                                                                }, this),
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-lg font-semibold text-red-300",
+                                                                                    children: [
+                                                                                        "-",
+                                                                                        (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.sonderausgabenPauschbetrag)
+                                                                                    ]
+                                                                                }, void 0, true, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 633,
+                                                                                    columnNumber: 25
+                                                                                }, this)
+                                                                            ]
+                                                                        }, void 0, true, {
+                                                                            fileName: "[project]/app/page.tsx",
+                                                                            lineNumber: 631,
+                                                                            columnNumber: 23
+                                                                        }, this),
+                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                                            children: [
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-xs text-zinc-500",
+                                                                                    children: "Vorsorgepauschale"
+                                                                                }, void 0, false, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 638,
+                                                                                    columnNumber: 25
+                                                                                }, this),
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-lg font-semibold text-red-300",
+                                                                                    children: [
+                                                                                        "-",
+                                                                                        (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.vorsorgepauschale)
+                                                                                    ]
+                                                                                }, void 0, true, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 639,
+                                                                                    columnNumber: 25
+                                                                                }, this)
+                                                                            ]
+                                                                        }, void 0, true, {
+                                                                            fileName: "[project]/app/page.tsx",
+                                                                            lineNumber: 637,
+                                                                            columnNumber: 23
+                                                                        }, this),
+                                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                                            children: [
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-xs text-zinc-500",
+                                                                                    children: "ZvE nach §39b (36€-Rundung)"
+                                                                                }, void 0, false, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 644,
+                                                                                    columnNumber: 25
+                                                                                }, this),
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-lg font-semibold text-blue-400",
+                                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.zvEForLohnsteuer)
+                                                                                }, void 0, false, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 645,
+                                                                                    columnNumber: 25
+                                                                                }, this),
+                                                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                    className: "text-xs text-zinc-600",
+                                                                                    children: taxResult.zuVersteuerndesEinkommen !== taxResult.zvEForLohnsteuer && `abgerundet von ${(0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.zuVersteuerndesEinkommen)}`
+                                                                                }, void 0, false, {
+                                                                                    fileName: "[project]/app/page.tsx",
+                                                                                    lineNumber: 648,
+                                                                                    columnNumber: 25
+                                                                                }, this)
+                                                                            ]
+                                                                        }, void 0, true, {
+                                                                            fileName: "[project]/app/page.tsx",
+                                                                            lineNumber: 643,
+                                                                            columnNumber: 23
+                                                                        }, this)
+                                                                    ]
+                                                                }, void 0, true, {
+                                                                    fileName: "[project]/app/page.tsx",
+                                                                    lineNumber: 620,
+                                                                    columnNumber: 21
+                                                                }, this)
+                                                            ]
+                                                        }, void 0, true, {
+                                                            fileName: "[project]/app/page.tsx",
+                                                            lineNumber: 615,
+                                                            columnNumber: 19
+                                                        }, this),
+                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                            className: "p-4 bg-gradient-to-r from-blue-900/20 to-zinc-900 border border-blue-800/30 rounded-xl",
+                                                            children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                                className: "flex flex-wrap items-center justify-between gap-4",
+                                                                children: [
+                                                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                                        children: [
+                                                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                className: "text-sm text-zinc-400",
+                                                                                children: "Nettoquote"
+                                                                            }, void 0, false, {
+                                                                                fileName: "[project]/app/page.tsx",
+                                                                                lineNumber: 660,
+                                                                                columnNumber: 25
+                                                                            }, this),
+                                                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                className: "text-2xl font-bold text-blue-400",
+                                                                                children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatPercent"])(taxResult.nettoQuote)
+                                                                            }, void 0, false, {
+                                                                                fileName: "[project]/app/page.tsx",
+                                                                                lineNumber: 661,
+                                                                                columnNumber: 25
+                                                                            }, this)
+                                                                        ]
+                                                                    }, void 0, true, {
+                                                                        fileName: "[project]/app/page.tsx",
+                                                                        lineNumber: 659,
+                                                                        columnNumber: 23
+                                                                    }, this),
+                                                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                                        children: [
+                                                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                className: "text-sm text-zinc-400",
+                                                                                children: "Gesamtbelastung"
+                                                                            }, void 0, false, {
+                                                                                fileName: "[project]/app/page.tsx",
+                                                                                lineNumber: 664,
+                                                                                columnNumber: 25
+                                                                            }, this),
+                                                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                className: "text-2xl font-bold text-red-400",
+                                                                                children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatPercent"])(taxResult.abgabenSatz)
+                                                                            }, void 0, false, {
+                                                                                fileName: "[project]/app/page.tsx",
+                                                                                lineNumber: 665,
+                                                                                columnNumber: 25
+                                                                            }, this)
+                                                                        ]
+                                                                    }, void 0, true, {
+                                                                        fileName: "[project]/app/page.tsx",
+                                                                        lineNumber: 663,
+                                                                        columnNumber: 23
+                                                                    }, this),
+                                                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                                        className: "text-right",
+                                                                        children: [
+                                                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                className: "text-sm text-zinc-400",
+                                                                                children: "Netto jährlich / monatlich"
+                                                                            }, void 0, false, {
+                                                                                fileName: "[project]/app/page.tsx",
+                                                                                lineNumber: 668,
+                                                                                columnNumber: 25
+                                                                            }, this),
+                                                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                className: "text-2xl font-bold text-green-400",
+                                                                                children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.nettoJahr)
+                                                                            }, void 0, false, {
+                                                                                fileName: "[project]/app/page.tsx",
+                                                                                lineNumber: 669,
+                                                                                columnNumber: 25
+                                                                            }, this),
+                                                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                                                                className: "text-lg text-green-400/80",
+                                                                                children: [
+                                                                                    (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(taxResult.nettoMonat),
+                                                                                    " / Monat"
+                                                                                ]
+                                                                            }, void 0, true, {
+                                                                                fileName: "[project]/app/page.tsx",
+                                                                                lineNumber: 670,
+                                                                                columnNumber: 25
+                                                                            }, this)
+                                                                        ]
+                                                                    }, void 0, true, {
+                                                                        fileName: "[project]/app/page.tsx",
+                                                                        lineNumber: 667,
+                                                                        columnNumber: 23
+                                                                    }, this)
+                                                                ]
+                                                            }, void 0, true, {
+                                                                fileName: "[project]/app/page.tsx",
+                                                                lineNumber: 658,
+                                                                columnNumber: 21
+                                                            }, this)
+                                                        }, void 0, false, {
+                                                            fileName: "[project]/app/page.tsx",
+                                                            lineNumber: 657,
+                                                            columnNumber: 19
+                                                        }, this)
+                                                    ]
+                                                }, void 0, true, {
+                                                    fileName: "[project]/app/page.tsx",
+                                                    lineNumber: 523,
+                                                    columnNumber: 17
+                                                }, this)
+                                            }, void 0, false, {
+                                                fileName: "[project]/app/page.tsx",
+                                                lineNumber: 522,
+                                                columnNumber: 15
+                                            }, this)
+                                        ]
+                                    }, void 0, true, {
+                                        fileName: "[project]/app/page.tsx",
+                                        lineNumber: 515,
+                                        columnNumber: 13
+                                    }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$tabs$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Tabs"], {
                                         defaultValue: "whatif",
                                         className: "w-full",
@@ -3029,14 +3476,14 @@ function TaxDashboard() {
                                                                 className: "h-4 w-4 mr-2"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/page.tsx",
-                                                                lineNumber: 596,
+                                                                lineNumber: 682,
                                                                 columnNumber: 19
                                                             }, this),
                                                             "What-If Analyse"
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/app/page.tsx",
-                                                        lineNumber: 595,
+                                                        lineNumber: 681,
                                                         columnNumber: 17
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$tabs$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["TabsTrigger"], {
@@ -3047,20 +3494,20 @@ function TaxDashboard() {
                                                                 className: "h-4 w-4 mr-2"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/page.tsx",
-                                                                lineNumber: 600,
+                                                                lineNumber: 686,
                                                                 columnNumber: 19
                                                             }, this),
                                                             "Steuerprogression"
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/app/page.tsx",
-                                                        lineNumber: 599,
+                                                        lineNumber: 685,
                                                         columnNumber: 17
                                                     }, this)
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/app/page.tsx",
-                                                lineNumber: 594,
+                                                lineNumber: 680,
                                                 columnNumber: 15
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$tabs$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["TabsContent"], {
@@ -3076,7 +3523,7 @@ function TaxDashboard() {
                                                                     children: "What-If Analyse"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/app/page.tsx",
-                                                                    lineNumber: 608,
+                                                                    lineNumber: 694,
                                                                     columnNumber: 21
                                                                 }, this),
                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardDescription"], {
@@ -3084,13 +3531,13 @@ function TaxDashboard() {
                                                                     children: "Vergleichen Sie Nettoeinkommen bei verschiedenen Bruttolöhnen"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/app/page.tsx",
-                                                                    lineNumber: 609,
+                                                                    lineNumber: 695,
                                                                     columnNumber: 21
                                                                 }, this)
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/app/page.tsx",
-                                                            lineNumber: 607,
+                                                            lineNumber: 693,
                                                             columnNumber: 19
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardContent"], {
@@ -3123,7 +3570,7 @@ function TaxDashboard() {
                                                                                                 stopOpacity: 0.3
                                                                                             }, void 0, false, {
                                                                                                 fileName: "[project]/app/page.tsx",
-                                                                                                lineNumber: 619,
+                                                                                                lineNumber: 705,
                                                                                                 columnNumber: 31
                                                                                             }, this),
                                                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("stop", {
@@ -3132,13 +3579,13 @@ function TaxDashboard() {
                                                                                                 stopOpacity: 0
                                                                                             }, void 0, false, {
                                                                                                 fileName: "[project]/app/page.tsx",
-                                                                                                lineNumber: 620,
+                                                                                                lineNumber: 706,
                                                                                                 columnNumber: 31
                                                                                             }, this)
                                                                                         ]
                                                                                     }, void 0, true, {
                                                                                         fileName: "[project]/app/page.tsx",
-                                                                                        lineNumber: 618,
+                                                                                        lineNumber: 704,
                                                                                         columnNumber: 29
                                                                                     }, this),
                                                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("linearGradient", {
@@ -3154,7 +3601,7 @@ function TaxDashboard() {
                                                                                                 stopOpacity: 0.3
                                                                                             }, void 0, false, {
                                                                                                 fileName: "[project]/app/page.tsx",
-                                                                                                lineNumber: 623,
+                                                                                                lineNumber: 709,
                                                                                                 columnNumber: 31
                                                                                             }, this),
                                                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("stop", {
@@ -3163,13 +3610,13 @@ function TaxDashboard() {
                                                                                                 stopOpacity: 0
                                                                                             }, void 0, false, {
                                                                                                 fileName: "[project]/app/page.tsx",
-                                                                                                lineNumber: 624,
+                                                                                                lineNumber: 710,
                                                                                                 columnNumber: 31
                                                                                             }, this)
                                                                                         ]
                                                                                     }, void 0, true, {
                                                                                         fileName: "[project]/app/page.tsx",
-                                                                                        lineNumber: 622,
+                                                                                        lineNumber: 708,
                                                                                         columnNumber: 29
                                                                                     }, this),
                                                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("linearGradient", {
@@ -3185,7 +3632,7 @@ function TaxDashboard() {
                                                                                                 stopOpacity: 0.3
                                                                                             }, void 0, false, {
                                                                                                 fileName: "[project]/app/page.tsx",
-                                                                                                lineNumber: 627,
+                                                                                                lineNumber: 713,
                                                                                                 columnNumber: 31
                                                                                             }, this),
                                                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("stop", {
@@ -3194,19 +3641,19 @@ function TaxDashboard() {
                                                                                                 stopOpacity: 0
                                                                                             }, void 0, false, {
                                                                                                 fileName: "[project]/app/page.tsx",
-                                                                                                lineNumber: 628,
+                                                                                                lineNumber: 714,
                                                                                                 columnNumber: 31
                                                                                             }, this)
                                                                                         ]
                                                                                     }, void 0, true, {
                                                                                         fileName: "[project]/app/page.tsx",
-                                                                                        lineNumber: 626,
+                                                                                        lineNumber: 712,
                                                                                         columnNumber: 29
                                                                                     }, this)
                                                                                 ]
                                                                             }, void 0, true, {
                                                                                 fileName: "[project]/app/page.tsx",
-                                                                                lineNumber: 617,
+                                                                                lineNumber: 703,
                                                                                 columnNumber: 27
                                                                             }, this),
                                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$recharts$2f$es6$2f$cartesian$2f$CartesianGrid$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CartesianGrid"], {
@@ -3214,7 +3661,7 @@ function TaxDashboard() {
                                                                                 stroke: "#27272a"
                                                                             }, void 0, false, {
                                                                                 fileName: "[project]/app/page.tsx",
-                                                                                lineNumber: 631,
+                                                                                lineNumber: 717,
                                                                                 columnNumber: 27
                                                                             }, this),
                                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$recharts$2f$es6$2f$cartesian$2f$XAxis$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["XAxis"], {
@@ -3223,7 +3670,7 @@ function TaxDashboard() {
                                                                                 stroke: "#71717a"
                                                                             }, void 0, false, {
                                                                                 fileName: "[project]/app/page.tsx",
-                                                                                lineNumber: 632,
+                                                                                lineNumber: 718,
                                                                                 columnNumber: 27
                                                                             }, this),
                                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$recharts$2f$es6$2f$cartesian$2f$YAxis$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["YAxis"], {
@@ -3231,7 +3678,7 @@ function TaxDashboard() {
                                                                                 stroke: "#71717a"
                                                                             }, void 0, false, {
                                                                                 fileName: "[project]/app/page.tsx",
-                                                                                lineNumber: 637,
+                                                                                lineNumber: 723,
                                                                                 columnNumber: 27
                                                                             }, this),
                                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$recharts$2f$es6$2f$component$2f$Tooltip$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Tooltip"], {
@@ -3250,12 +3697,12 @@ function TaxDashboard() {
                                                                                 labelFormatter: (label)=>`Brutto: ${(0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(label)}`
                                                                             }, void 0, false, {
                                                                                 fileName: "[project]/app/page.tsx",
-                                                                                lineNumber: 641,
+                                                                                lineNumber: 727,
                                                                                 columnNumber: 27
                                                                             }, this),
                                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$recharts$2f$es6$2f$component$2f$Legend$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Legend"], {}, void 0, false, {
                                                                                 fileName: "[project]/app/page.tsx",
-                                                                                lineNumber: 652,
+                                                                                lineNumber: 738,
                                                                                 columnNumber: 27
                                                                             }, this),
                                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$recharts$2f$es6$2f$cartesian$2f$Area$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Area"], {
@@ -3268,7 +3715,7 @@ function TaxDashboard() {
                                                                                 strokeWidth: 2
                                                                             }, void 0, false, {
                                                                                 fileName: "[project]/app/page.tsx",
-                                                                                lineNumber: 653,
+                                                                                lineNumber: 739,
                                                                                 columnNumber: 27
                                                                             }, this),
                                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$recharts$2f$es6$2f$cartesian$2f$Area$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Area"], {
@@ -3281,7 +3728,7 @@ function TaxDashboard() {
                                                                                 strokeWidth: 2
                                                                             }, void 0, false, {
                                                                                 fileName: "[project]/app/page.tsx",
-                                                                                lineNumber: 662,
+                                                                                lineNumber: 748,
                                                                                 columnNumber: 27
                                                                             }, this),
                                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$recharts$2f$es6$2f$cartesian$2f$Area$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Area"], {
@@ -3294,39 +3741,39 @@ function TaxDashboard() {
                                                                                 strokeWidth: 2
                                                                             }, void 0, false, {
                                                                                 fileName: "[project]/app/page.tsx",
-                                                                                lineNumber: 671,
+                                                                                lineNumber: 757,
                                                                                 columnNumber: 27
                                                                             }, this)
                                                                         ]
                                                                     }, void 0, true, {
                                                                         fileName: "[project]/app/page.tsx",
-                                                                        lineNumber: 616,
+                                                                        lineNumber: 702,
                                                                         columnNumber: 25
                                                                     }, this)
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/app/page.tsx",
-                                                                    lineNumber: 615,
+                                                                    lineNumber: 701,
                                                                     columnNumber: 23
                                                                 }, this)
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/page.tsx",
-                                                                lineNumber: 614,
+                                                                lineNumber: 700,
                                                                 columnNumber: 21
                                                             }, this)
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/page.tsx",
-                                                            lineNumber: 613,
+                                                            lineNumber: 699,
                                                             columnNumber: 19
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/app/page.tsx",
-                                                    lineNumber: 606,
+                                                    lineNumber: 692,
                                                     columnNumber: 17
                                                 }, this)
                                             }, void 0, false, {
                                                 fileName: "[project]/app/page.tsx",
-                                                lineNumber: 605,
+                                                lineNumber: 691,
                                                 columnNumber: 15
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$tabs$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["TabsContent"], {
@@ -3339,10 +3786,13 @@ function TaxDashboard() {
                                                             children: [
                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardTitle"], {
                                                                     className: "text-white",
-                                                                    children: "Steuerprogression 2026"
-                                                                }, void 0, false, {
+                                                                    children: [
+                                                                        "Steuerprogression ",
+                                                                        activeProfile.year
+                                                                    ]
+                                                                }, void 0, true, {
                                                                     fileName: "[project]/app/page.tsx",
-                                                                    lineNumber: 690,
+                                                                    lineNumber: 776,
                                                                     columnNumber: 21
                                                                 }, this),
                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardDescription"], {
@@ -3350,13 +3800,13 @@ function TaxDashboard() {
                                                                     children: "Grenzsteuersatz und Durchschnittssteuersatz nach Einkommen"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/app/page.tsx",
-                                                                    lineNumber: 691,
+                                                                    lineNumber: 777,
                                                                     columnNumber: 21
                                                                 }, this)
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/app/page.tsx",
-                                                            lineNumber: 689,
+                                                            lineNumber: 775,
                                                             columnNumber: 19
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["CardContent"], {
@@ -3380,7 +3830,7 @@ function TaxDashboard() {
                                                                                     stroke: "#27272a"
                                                                                 }, void 0, false, {
                                                                                     fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 699,
+                                                                                    lineNumber: 785,
                                                                                     columnNumber: 27
                                                                                 }, this),
                                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$recharts$2f$es6$2f$cartesian$2f$XAxis$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["XAxis"], {
@@ -3389,7 +3839,7 @@ function TaxDashboard() {
                                                                                     stroke: "#71717a"
                                                                                 }, void 0, false, {
                                                                                     fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 700,
+                                                                                    lineNumber: 786,
                                                                                     columnNumber: 27
                                                                                 }, this),
                                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$recharts$2f$es6$2f$cartesian$2f$YAxis$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["YAxis"], {
@@ -3397,7 +3847,7 @@ function TaxDashboard() {
                                                                                     stroke: "#71717a"
                                                                                 }, void 0, false, {
                                                                                     fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 705,
+                                                                                    lineNumber: 791,
                                                                                     columnNumber: 27
                                                                                 }, this),
                                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$recharts$2f$es6$2f$component$2f$Tooltip$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Tooltip"], {
@@ -3416,12 +3866,12 @@ function TaxDashboard() {
                                                                                     labelFormatter: (label)=>`Einkommen: ${(0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(label)}`
                                                                                 }, void 0, false, {
                                                                                     fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 709,
+                                                                                    lineNumber: 795,
                                                                                     columnNumber: 27
                                                                                 }, this),
                                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$recharts$2f$es6$2f$component$2f$Legend$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Legend"], {}, void 0, false, {
                                                                                     fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 720,
+                                                                                    lineNumber: 806,
                                                                                     columnNumber: 27
                                                                                 }, this),
                                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$recharts$2f$es6$2f$cartesian$2f$Area$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Area"], {
@@ -3434,7 +3884,7 @@ function TaxDashboard() {
                                                                                     strokeWidth: 2
                                                                                 }, void 0, false, {
                                                                                     fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 721,
+                                                                                    lineNumber: 807,
                                                                                     columnNumber: 27
                                                                                 }, this),
                                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$recharts$2f$es6$2f$cartesian$2f$Line$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Line"], {
@@ -3446,7 +3896,7 @@ function TaxDashboard() {
                                                                                     dot: false
                                                                                 }, void 0, false, {
                                                                                     fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 730,
+                                                                                    lineNumber: 816,
                                                                                     columnNumber: 27
                                                                                 }, this),
                                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$recharts$2f$es6$2f$cartesian$2f$Line$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Line"], {
@@ -3459,23 +3909,23 @@ function TaxDashboard() {
                                                                                     hide: true
                                                                                 }, void 0, false, {
                                                                                     fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 739,
+                                                                                    lineNumber: 825,
                                                                                     columnNumber: 27
                                                                                 }, this)
                                                                             ]
                                                                         }, void 0, true, {
                                                                             fileName: "[project]/app/page.tsx",
-                                                                            lineNumber: 698,
+                                                                            lineNumber: 784,
                                                                             columnNumber: 25
                                                                         }, this)
                                                                     }, void 0, false, {
                                                                         fileName: "[project]/app/page.tsx",
-                                                                        lineNumber: 697,
+                                                                        lineNumber: 783,
                                                                         columnNumber: 23
                                                                     }, this)
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/app/page.tsx",
-                                                                    lineNumber: 696,
+                                                                    lineNumber: 782,
                                                                     columnNumber: 21
                                                                 }, this),
                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3489,15 +3939,15 @@ function TaxDashboard() {
                                                                                     children: "Grundfreibetrag"
                                                                                 }, void 0, false, {
                                                                                     fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 753,
+                                                                                    lineNumber: 839,
                                                                                     columnNumber: 25
                                                                                 }, this),
                                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
                                                                                     className: "text-white font-medium",
-                                                                                    children: "12.348 €"
+                                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(activeProfile.grundfreibetrag)
                                                                                 }, void 0, false, {
                                                                                     fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 754,
+                                                                                    lineNumber: 840,
                                                                                     columnNumber: 25
                                                                                 }, this),
                                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -3505,13 +3955,13 @@ function TaxDashboard() {
                                                                                     children: "0% Steuer"
                                                                                 }, void 0, false, {
                                                                                     fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 755,
+                                                                                    lineNumber: 841,
                                                                                     columnNumber: 25
                                                                                 }, this)
                                                                             ]
                                                                         }, void 0, true, {
                                                                             fileName: "[project]/app/page.tsx",
-                                                                            lineNumber: 752,
+                                                                            lineNumber: 838,
                                                                             columnNumber: 23
                                                                         }, this),
                                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3522,15 +3972,15 @@ function TaxDashboard() {
                                                                                     children: "Zone 1 Ende"
                                                                                 }, void 0, false, {
                                                                                     fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 758,
+                                                                                    lineNumber: 844,
                                                                                     columnNumber: 25
                                                                                 }, this),
                                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
                                                                                     className: "text-white font-medium",
-                                                                                    children: "17.799 €"
+                                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(activeProfile.zone1End)
                                                                                 }, void 0, false, {
                                                                                     fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 759,
+                                                                                    lineNumber: 845,
                                                                                     columnNumber: 25
                                                                                 }, this),
                                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -3538,13 +3988,13 @@ function TaxDashboard() {
                                                                                     children: "bis ~14% Grenzsteuer"
                                                                                 }, void 0, false, {
                                                                                     fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 760,
+                                                                                    lineNumber: 846,
                                                                                     columnNumber: 25
                                                                                 }, this)
                                                                             ]
                                                                         }, void 0, true, {
                                                                             fileName: "[project]/app/page.tsx",
-                                                                            lineNumber: 757,
+                                                                            lineNumber: 843,
                                                                             columnNumber: 23
                                                                         }, this),
                                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3555,15 +4005,15 @@ function TaxDashboard() {
                                                                                     children: "Spitzensteuersatz"
                                                                                 }, void 0, false, {
                                                                                     fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 763,
+                                                                                    lineNumber: 849,
                                                                                     columnNumber: 25
                                                                                 }, this),
                                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
                                                                                     className: "text-white font-medium",
-                                                                                    children: "69.878 €"
+                                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(activeProfile.zone2End + 1)
                                                                                 }, void 0, false, {
                                                                                     fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 764,
+                                                                                    lineNumber: 850,
                                                                                     columnNumber: 25
                                                                                 }, this),
                                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -3571,13 +4021,13 @@ function TaxDashboard() {
                                                                                     children: "42% Grenzsteuer"
                                                                                 }, void 0, false, {
                                                                                     fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 765,
+                                                                                    lineNumber: 851,
                                                                                     columnNumber: 25
                                                                                 }, this)
                                                                             ]
                                                                         }, void 0, true, {
                                                                             fileName: "[project]/app/page.tsx",
-                                                                            lineNumber: 762,
+                                                                            lineNumber: 848,
                                                                             columnNumber: 23
                                                                         }, this),
                                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3588,15 +4038,15 @@ function TaxDashboard() {
                                                                                     children: "Reichensteuer"
                                                                                 }, void 0, false, {
                                                                                     fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 768,
+                                                                                    lineNumber: 854,
                                                                                     columnNumber: 25
                                                                                 }, this),
                                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
                                                                                     className: "text-white font-medium",
-                                                                                    children: "277.826 €"
+                                                                                    children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$tax$2d$calculator$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatCurrency"])(activeProfile.zone3End + 1)
                                                                                 }, void 0, false, {
                                                                                     fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 769,
+                                                                                    lineNumber: 855,
                                                                                     columnNumber: 25
                                                                                 }, this),
                                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -3604,54 +4054,54 @@ function TaxDashboard() {
                                                                                     children: "45% Grenzsteuer"
                                                                                 }, void 0, false, {
                                                                                     fileName: "[project]/app/page.tsx",
-                                                                                    lineNumber: 770,
+                                                                                    lineNumber: 856,
                                                                                     columnNumber: 25
                                                                                 }, this)
                                                                             ]
                                                                         }, void 0, true, {
                                                                             fileName: "[project]/app/page.tsx",
-                                                                            lineNumber: 767,
+                                                                            lineNumber: 853,
                                                                             columnNumber: 23
                                                                         }, this)
                                                                     ]
                                                                 }, void 0, true, {
                                                                     fileName: "[project]/app/page.tsx",
-                                                                    lineNumber: 751,
+                                                                    lineNumber: 837,
                                                                     columnNumber: 21
                                                                 }, this)
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/app/page.tsx",
-                                                            lineNumber: 695,
+                                                            lineNumber: 781,
                                                             columnNumber: 19
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/app/page.tsx",
-                                                    lineNumber: 688,
+                                                    lineNumber: 774,
                                                     columnNumber: 17
                                                 }, this)
                                             }, void 0, false, {
                                                 fileName: "[project]/app/page.tsx",
-                                                lineNumber: 687,
+                                                lineNumber: 773,
                                                 columnNumber: 15
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/app/page.tsx",
-                                        lineNumber: 593,
+                                        lineNumber: 679,
                                         columnNumber: 13
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/app/page.tsx",
-                                lineNumber: 387,
+                                lineNumber: 428,
                                 columnNumber: 11
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/app/page.tsx",
-                        lineNumber: 122,
+                        lineNumber: 126,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("footer", {
@@ -3659,10 +4109,10 @@ function TaxDashboard() {
                         children: [
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
                                 className: "text-sm text-zinc-500",
-                                children: "Berechnung nach §32a EStG für das Steuerjahr 2026. Alle Angaben ohne Gewähr."
+                                children: "Berechnung nach §32a EStG im gewählten Profil. Alle Angaben ohne Gewähr."
                             }, void 0, false, {
                                 fileName: "[project]/app/page.tsx",
-                                lineNumber: 782,
+                                lineNumber: 868,
                                 columnNumber: 11
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -3670,29 +4120,29 @@ function TaxDashboard() {
                                 children: "Die Berechnung dient als Orientierung. Für verbindliche Auskünfte konsultieren Sie einen Steuerberater."
                             }, void 0, false, {
                                 fileName: "[project]/app/page.tsx",
-                                lineNumber: 785,
+                                lineNumber: 871,
                                 columnNumber: 11
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/app/page.tsx",
-                        lineNumber: 781,
+                        lineNumber: 867,
                         columnNumber: 9
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/app/page.tsx",
-                lineNumber: 121,
+                lineNumber: 125,
                 columnNumber: 7
             }, this)
         ]
     }, void 0, true, {
         fileName: "[project]/app/page.tsx",
-        lineNumber: 99,
+        lineNumber: 103,
         columnNumber: 5
     }, this);
 }
-_s(TaxDashboard, "4bxjNAwz/+QwokDoG/h2kJtkA7U=");
+_s(TaxDashboard, "0ndbGDnIN44Jx79Mck65wKIErhM=");
 _c = TaxDashboard;
 var _c;
 __turbopack_context__.k.register(_c, "TaxDashboard");

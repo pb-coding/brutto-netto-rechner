@@ -27,3 +27,54 @@
        please check the style of container, or the props width(100%) and height(100%),
        or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
        height and width.
+[00:15:01.220] Browser WARN    The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[00:15:01.220] Browser WARN    The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[00:15:32.893] Server  LOG     ✓ Compiled in 379ms
+[00:23:10.292] Server  LOG     ✓ Compiled in 135ms
+[00:23:11.095] Browser ERROR   uncaughtError: ReferenceError: TAX_2026 is not defined
+[00:23:49.725] Server  WARN    ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+[00:23:49.735] Server  LOG     ✓ Compiled in 36ms
+[00:23:50.190] Server  ERROR   ⨯ TypeError: Cannot read properties of undefined (reading 'rvBeitragsbemessungsgrenze')
+[00:23:50.207] Browser ERROR   uncaughtError: TypeError: Cannot read properties of undefined (reading 'rvBeitragsbemessungsgrenze')
+[00:23:52.104] Browser ERROR   uncaughtError: TypeError: Cannot read properties of undefined (reading 'rvBeitragsbemessungsgrenze')
+[00:24:09.587] Server  WARN    ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+[00:24:09.603] Server  LOG     ✓ Compiled in 31ms
+[00:24:09.754] Server  WARN    The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[00:24:11.566] Browser WARN    The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[00:24:11.566] Browser WARN    The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[00:24:50.932] Server  LOG     ✓ Compiled in 134ms
+[00:24:52.101] Browser WARN    The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[00:24:52.101] Browser WARN    The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[00:27:03.604] Server  WARN    The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[00:27:04.095] Browser WARN    The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[00:27:04.095] Browser WARN    The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
