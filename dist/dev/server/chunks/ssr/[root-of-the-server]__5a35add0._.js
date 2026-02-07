@@ -625,6 +625,9 @@ function TabsContent({ className, ...props }) {
     "generateWhatIfData",
     ()=>generateWhatIfData
 ]);
+function roundToCents(value) {
+    return Math.round(value * 100) / 100;
+}
 // 2026 Tax Parameters (based on official §32a EStG and Sozialversicherungsrechengrößen)
 // Sources:
 // - §32a EStG: https://www.gesetze-im-internet.de/estg/__32a.html
@@ -693,8 +696,8 @@ const TAX_2026 = {
         // Zone 5: Reichensteuer 45% (§32a Abs. 1 Nr. 5)
         steuer = 0.45 * x - 19185.88;
     }
-    // Round down to full Euro (§32a Abs. 1 S. 6 EStG)
-    return Math.max(0, Math.floor(steuer));
+    // Cent-genaue Ausgabe für Jahresvergleich mit externen Rechnern
+    return Math.max(0, roundToCents(steuer));
 }
 /**
  * §39b Abs. 2 Satz 7 EStG - Spezialtarif für Steuerklassen V und VI
@@ -731,7 +734,7 @@ function calculateUp56(zx) {
  */ function calculateSplittingTarif(zve) {
     const halvedZve = zve / 2;
     const halvedTax = calculateTarif(halvedZve);
-    return 2 * halvedTax;
+    return roundToCents(2 * halvedTax);
 }
 /**
  * §39b Abs. 2 Satz 9 EStG - Abrundung auf volle 36 Euro
@@ -749,13 +752,13 @@ function calculateUp56(zx) {
     }
     const fullSoli = lohnsteuer * TAX_2026.soliSatz;
     const minderungSoli = (lohnsteuer - TAX_2026.soliFreigrenze) * TAX_2026.soliMinderungssatz;
-    return Math.round(Math.min(fullSoli, minderungSoli));
+    return roundToCents(Math.min(fullSoli, minderungSoli));
 }
 /**
  * Kirchensteuer - 8% oder 9% der Lohnsteuer
  */ function calculateKirchensteuer(lohnsteuer, enabled, satz) {
     if (!enabled) return 0;
-    return Math.round(lohnsteuer * satz);
+    return roundToCents(lohnsteuer * satz);
 }
 /**
  * PUEG Reform 2026 - Pflegeversicherung mit Kinderstaffelung
